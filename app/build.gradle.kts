@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "br.com.monitorarmazenamentomemoria"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "br.com.monitorarmazenamentomemoria"
