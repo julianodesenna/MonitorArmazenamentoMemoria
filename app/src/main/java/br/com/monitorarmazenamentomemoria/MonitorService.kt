@@ -26,8 +26,12 @@ class MonitorService : Service() {
         val prefs = getSharedPreferences("monitor_config", Context.MODE_PRIVATE)
         val green = prefs.getInt("greenLimit", 89)
         val yellow = prefs.getInt("yellowLimit", 96)
-        startForeground(Monitor.NOTIFICATION_ID, Monitor.buildNotification(this, green, yellow))
-        handler.post(updater)
+        try {
+            startForeground(Monitor.NOTIFICATION_ID, Monitor.buildNotification(this, green, yellow))
+            handler.post(updater)
+        } catch (e: Exception) {
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

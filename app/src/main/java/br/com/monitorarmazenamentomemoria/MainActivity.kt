@@ -104,9 +104,13 @@ class MainActivity : Activity() {
 
     private fun startMonitorService() {
         if (notificationEnabled) {
-            val intent = Intent(this, MonitorService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-            else startService(intent)
+            try {
+                val intent = Intent(this, MonitorService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+                else startService(intent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Monitoramento em segundo plano será ajustado pelo Android", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
