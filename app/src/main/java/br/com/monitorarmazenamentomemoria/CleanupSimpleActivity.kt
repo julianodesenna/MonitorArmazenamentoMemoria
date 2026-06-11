@@ -181,11 +181,7 @@ class CleanupSimpleActivity : Activity() {
         box.addView(d)
 
         box.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(title)
-                .setMessage("Na próxima etapa, esta categoria vai abrir a lista real de arquivos filtrados.")
-                .setPositiveButton("OK", null)
-                .show()
+            showCategory(title, desc)
         }
 
         val params = LinearLayout.LayoutParams(
@@ -197,6 +193,96 @@ class CleanupSimpleActivity : Activity() {
 
         return box
     }
+
+
+    private fun showCategory(categoryTitle: String, categoryDesc: String) {
+        root.removeAllViews()
+
+        val back = Button(this)
+        back.text = "← Voltar para categorias"
+        back.setOnClickListener { drawHome() }
+        root.addView(back)
+
+        val title = TextView(this)
+        title.text = categoryTitle
+        title.textSize = 28f
+        title.setTypeface(null, Typeface.BOLD)
+        title.setTextColor(Color.rgb(14, 26, 56))
+        title.setPadding(0, dp(12), 0, dp(4))
+        root.addView(title)
+
+        val subtitle = TextView(this)
+        subtitle.text = categoryDesc
+        subtitle.textSize = 15f
+        subtitle.setTextColor(Color.rgb(80, 90, 110))
+        subtitle.setPadding(0, 0, 0, dp(14))
+        root.addView(subtitle)
+
+        val filter = card()
+        filter.addView(titleText("Filtros"))
+
+        val sizeRow = LinearLayout(this)
+        sizeRow.orientation = LinearLayout.HORIZONTAL
+
+        val f10 = Button(this)
+        f10.text = "+10 MB"
+        f10.setOnClickListener { showFilterMessage(categoryTitle, "+10 MB") }
+
+        val f50 = Button(this)
+        f50.text = "+50 MB"
+        f50.setOnClickListener { showFilterMessage(categoryTitle, "+50 MB") }
+
+        val f100 = Button(this)
+        f100.text = "+100 MB"
+        f100.setOnClickListener { showFilterMessage(categoryTitle, "+100 MB") }
+
+        sizeRow.addView(f10, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        sizeRow.addView(f50, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        sizeRow.addView(f100, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        filter.addView(sizeRow)
+
+        val orderRow = LinearLayout(this)
+        orderRow.orientation = LinearLayout.HORIZONTAL
+
+        val maior = Button(this)
+        maior.text = "Maior primeiro"
+        maior.setOnClickListener { showFilterMessage(categoryTitle, "Maior primeiro") }
+
+        val recente = Button(this)
+        recente.text = "Mais recente"
+        recente.setOnClickListener { showFilterMessage(categoryTitle, "Mais recente") }
+
+        orderRow.addView(maior, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        orderRow.addView(recente, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        filter.addView(orderRow)
+
+        root.addView(filter)
+
+        val preview = card()
+        preview.addView(titleText("Lista de arquivos"))
+
+        val info = TextView(this)
+        info.text =
+            "A estrutura da categoria está pronta.\\n\\n" +
+            "Na próxima etapa segura, esta tela vai receber os arquivos reais encontrados no armazenamento, com:\\n\\n" +
+            "• nome do arquivo\\n" +
+            "• tamanho real\\n" +
+            "• data de modificação\\n" +
+            "• local/pasta\\n" +
+            "• botão Abrir\\n" +
+            "• botão Detalhes"
+        info.textSize = 15f
+        info.setTextColor(Color.rgb(70, 80, 100))
+        info.setPadding(0, dp(8), 0, 0)
+        preview.addView(info)
+
+        root.addView(preview)
+    }
+
+    private fun showFilterMessage(categoryTitle: String, filterName: String) {
+        Toast.makeText(this, "$categoryTitle • $filterName", Toast.LENGTH_SHORT).show()
+    }
+
 
     private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
