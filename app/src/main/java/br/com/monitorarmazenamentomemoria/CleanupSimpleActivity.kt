@@ -11,6 +11,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.webkit.MimeTypeMap
+import android.os.StrictMode
 import android.os.Environment
 import android.provider.Settings
 import android.view.Gravity
@@ -321,10 +323,12 @@ class CleanupSimpleActivity : Activity() {
                     "Tamanho: ${formatSize(item.size)}\n" +
                     "Modificado: ${formatDate(item.modified)}\n" +
                     "Risco: ${if (item.risk == "alto") "alto" else "normal"}\n\n" +
-                    "Local:\n${item.path}\n\n" +
-                    "Na próxima etapa vamos colocar botão Abrir."
+                    "Local:\n${item.path}"
                 )
-                .setPositiveButton("OK", null)
+                .setPositiveButton("Abrir") { _, _ ->
+                    openFile(item)
+                }
+                .setNegativeButton("Fechar", null)
                 .show()
         }
 
@@ -380,6 +384,70 @@ class CleanupSimpleActivity : Activity() {
         super.onResume()
         if (::root.isInitialized && hasStorageAccess()) {
             scanFiles()
+        }
+    }
+
+
+
+    private fun openFile(item: FileItem) {
+        try {
+            val file = File(item.path)
+            if (!file.exists()) {
+                Toast.makeText(this, "Arquivo não encontrado", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            try {
+                StrictMode::class.java
+                    .getMethod("disableDeathOnFileUriExposure")
+                    .invoke(null)
+            } catch (_: Exception) {}
+
+            val uri = Uri.fromFile(file)
+            val mime = mimeType(file.name)
+
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.setDataAndType(uri, mime)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+            startActivity(Intent.createChooser(intent, "Abrir arquivo com"))
+        } catch (_: Exception) {
+            AlertDialog.Builder(this)
+                .setTitle("Não foi possível abrir")
+                .setMessage(
+                    "O Android não encontrou um aplicativo compatível para abrir este arquivo, ou bloqueou o acesso direto.\\n\\n" +
+                    "Arquivo:\\n${item.path}"
+                )
+                .setPositiveButton("OK", null)
+                .show()
+        }
+    }
+
+    private fun mimeType(name: String): String {
+        val lower = name.lowercase(Locale.ROOT)
+        val ext = lower.substringAfterLast('.', "")
+
+        return when {
+            lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
+            lower.endsWith(".png") -> "image/png"
+            lower.endsWith(".webp") -> "image/webp"
+            lower.endsWith(".gif") -> "image/gif"
+            lower.endsWith(".mp4") -> "video/mp4"
+            lower.endsWith(".mkv") -> "video/*"
+            lower.endsWith(".mov") -> "video/*"
+            lower.endsWith(".mp3") -> "audio/mpeg"
+            lower.endsWith(".m4a") -> "audio/*"
+            lower.endsWith(".opus") -> "audio/*"
+            lower.endsWith(".wav") -> "audio/wav"
+            lower.endsWith(".pdf") -> "application/pdf"
+            lower.endsWith(".apk") -> "application/vnd.android.package-archive"
+            lower.endsWith(".txt") -> "text/plain"
+            lower.endsWith(".doc") || lower.endsWith(".docx") -> "application/msword"
+            lower.endsWith(".xls") || lower.endsWith(".xlsx") -> "application/vnd.ms-excel"
+            lower.endsWith(".zip") -> "application/zip"
+            ext.isNotBlank() -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+            else -> "*/*"
         }
     }
 
