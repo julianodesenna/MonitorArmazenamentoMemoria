@@ -58,5 +58,7 @@
 
         </receiver>
 
+            <activity android:name=".CleanupSimpleActivity" android:exported="false" />
+
     </application>
 </manifest>
