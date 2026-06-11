@@ -1,0 +1,41 @@
+name: Android Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK and AAB
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.5.1
+
+      - name: Compilar APK de teste e AAB da Play Store
+        run: gradle :app:assembleDebug :app:bundleRelease
+
+      - name: Salvar APK de teste
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonitorArmazenamentoMemoria-APK-Teste
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Salvar AAB para Play Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonitorArmazenamentoMemoria-AAB-PlayStore
+          path: app/build/outputs/bundle/release/*.aab
