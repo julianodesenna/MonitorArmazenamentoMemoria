@@ -2,6 +2,10 @@ package br.com.monitorarmazenamentomemoria
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.os.Build
+import android.net.Uri
+import android.content.pm.PackageManager
+import android.Manifest
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -116,6 +120,13 @@ class CleanupSimpleActivity : Activity() {
         row.addView(update, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(androidStorage, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(row)
+
+        val accessFiles = Button(this)
+        accessFiles.text = if (hasStorageAccess()) "Acesso aos arquivos liberado" else "Liberar acesso aos arquivos"
+        accessFiles.setOnClickListener {
+            requestStorageAccess()
+        }
+        actions.addView(accessFiles)
 
         root.addView(actions)
 
@@ -320,7 +331,70 @@ class CleanupSimpleActivity : Activity() {
         return box
     }
 
+
+    private fun hasStorageAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStorageAccess() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            } else {
+                requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 701)
+            }
+
+            if (Build.VERSION.SDK_INT >= 33) {
+                requestPermissions(
+                    arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_AUDIO
+                    ),
+                    702
+                )
+            }
+
+            AlertDialog.Builder(this)
+                .setTitle("Permitir acesso aos arquivos")
+                .setMessage(
+                    "Na tela que abrir, ative a permissão para permitir que o app veja os arquivos do aparelho.\\n\\n" +
+                    "Depois volte para o app e toque em Atualizar."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::root.isInitialized && hasStorageAccess()) {
+            scanFiles()
+        }
+    }
+
+
     private fun scanFiles() {
+        if (!hasStorageAccess()) {
+            allFiles = emptyList()
+            runOnUiThread {
+                if (::statusText.isInitialized) {
+                    statusText.text = "Acesso aos arquivos ainda não liberado"
+                }
+            }
+            return
+        }
+
         thread {
             val result = mutableListOf<FileItem>()
             val started = System.currentTimeMillis()
