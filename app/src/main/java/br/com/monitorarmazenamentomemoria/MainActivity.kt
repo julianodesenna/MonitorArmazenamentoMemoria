@@ -151,9 +151,18 @@ class MainActivity : Activity() {
         nav.gravity = Gravity.CENTER
         nav.setPadding(dp(10), dp(10), dp(10), dp(10))
         nav.background = rounded(Color.WHITE, Color.rgb(230, 235, 245), dp(22))
-        nav.addView(navItem("📊\nPainel", true))
-        nav.addView(navItem("▦\nWidget", false))
-        nav.addView(navItem("⚙\nConfig.", false))
+        nav.addView(navItem("📊\nPainel", true) {
+            updateInfo()
+            Toast.makeText(this, "Painel atualizado", Toast.LENGTH_SHORT).show()
+        })
+
+        nav.addView(navItem("▦\nWidget", false) {
+            showWidgetScreen()
+        })
+
+        nav.addView(navItem("⚙\nConfig.", false) {
+            showConfigScreen()
+        })
         val navParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -346,7 +355,7 @@ class MainActivity : Activity() {
         progress = 0
     }
 
-    private fun navItem(textValue: String, active: Boolean): TextView {
+    private fun navItem(textValue: String, active: Boolean, action: () -> Unit): TextView {
         return TextView(this).apply {
             text = textValue
             textSize = 13f
@@ -355,7 +364,43 @@ class MainActivity : Activity() {
             background = if (active) rounded(Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(16)) else null
             setPadding(dp(10), dp(8), dp(10), dp(8))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { action() }
         }
+    }
+
+    private fun showWidgetScreen() {
+        AlertDialog.Builder(this)
+            .setTitle("Widget na tela inicial")
+            .setMessage(
+                "Esta será a próxima fase do aplicativo.\n\n" +
+                "Aqui vamos criar um widget para ficar na tela inicial do celular, parecido com um relógio.\n\n" +
+                "Ele vai mostrar:\n" +
+                "• Armazenamento usado\n" +
+                "• Memória RAM usada\n" +
+                "• Espaço livre\n" +
+                "• Barras coloridas\n\n" +
+                "Depois você poderá segurar na tela inicial do Android e adicionar o widget."
+            )
+            .setPositiveButton("Entendi", null)
+            .show()
+    }
+
+    private fun showConfigScreen() {
+        AlertDialog.Builder(this)
+            .setTitle("Configurações")
+            .setMessage(
+                "Configurações da Etapa 2A:\n\n" +
+                "Cores atuais:\n" +
+                "• Verde: até 89%\n" +
+                "• Amarelo: de 90% a 96%\n" +
+                "• Vermelho: 97% ou mais\n\n" +
+                "Atualização:\n" +
+                "• Tela aberta: a cada 30 segundos\n" +
+                "• Segundo plano: pelo Android, normalmente a cada 15 minutos ou mais\n\n" +
+                "Na próxima etapa, estes valores poderão ser ajustados pelo usuário."
+            )
+            .setPositiveButton("Fechar", null)
+            .show()
     }
 
     private fun buttonParams(): LinearLayout.LayoutParams {
