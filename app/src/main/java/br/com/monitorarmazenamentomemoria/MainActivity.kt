@@ -235,6 +235,7 @@ class MainActivity : Activity() {
         if (notificationEnabled) {
             Monitor.showNotification(this, greenLimit, yellowLimit)
         }
+        MonitorWidgetProvider.updateAll(this)
     }
 
     private fun applyData(
@@ -436,11 +437,24 @@ class MainActivity : Activity() {
         root.addView(preview)
 
         val explanation = infoCard(
-            "Próxima fase",
-            "Na versão seguinte vamos criar o widget real para colocar na tela inicial do Android.\n\n" +
-            "Ele ficará como um relógio, mostrando armazenamento e RAM sem abrir o app."
+            "Widget real disponível",
+            "Agora o widget já pode ser adicionado na tela inicial do Android.\n\n" +
+            "Como adicionar:\n" +
+            "1. Segure em uma área vazia da tela inicial.\n" +
+            "2. Toque em Widgets.\n" +
+            "3. Procure Monitor de Armazenamento e Memória.\n" +
+            "4. Arraste para a tela inicial.\n\n" +
+            "O widget mostra armazenamento, RAM, espaço livre e atualização."
         )
         root.addView(explanation)
+
+        val updateWidgetButton = Button(this)
+        updateWidgetButton.text = "ATUALIZAR WIDGET AGORA"
+        updateWidgetButton.setOnClickListener {
+            MonitorWidgetProvider.updateAll(this)
+            Toast.makeText(this, "Widget atualizado", Toast.LENGTH_SHORT).show()
+        }
+        root.addView(updateWidgetButton, buttonParams())
 
         root.addView(bottomNav("Widget"))
     }
@@ -780,6 +794,7 @@ object Monitor {
 class MonitorWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
         Monitor.showNotification(applicationContext)
+        MonitorWidgetProvider.updateAll(applicationContext)
         return Result.success()
     }
 }
