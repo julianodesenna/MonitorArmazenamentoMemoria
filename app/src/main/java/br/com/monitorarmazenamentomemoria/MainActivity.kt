@@ -11,6 +11,11 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.*
+import kotlin.concurrent.thread
+import java.io.File
+import android.view.View
+import android.provider.Settings
+import android.net.Uri
 import android.view.Gravity
 import android.widget.*
 import androidx.core.app.NotificationCompat
@@ -36,6 +41,7 @@ class MainActivity : Activity() {
     private var yellowLimit = 96
     private var notificationEnabled = true
     private var themeMode = "auto"
+    private var activeScreen = "Painel"
 
     private lateinit var root: LinearLayout
     private lateinit var scroll: ScrollView
@@ -148,6 +154,7 @@ class MainActivity : Activity() {
     }
 
     private fun showPanelScreen() {
+        activeScreen = "Painel"
         baseScreen()
 
         val title = TextView(this)
@@ -266,6 +273,7 @@ class MainActivity : Activity() {
     }
 
     private fun showConfigScreen() {
+        activeScreen = "Config."
         baseScreen()
 
         root.addView(screenTitle("Configurações"))
@@ -405,6 +413,7 @@ class MainActivity : Activity() {
     }
 
     private fun showWidgetScreen() {
+        activeScreen = "Widget"
         baseScreen()
         root.addView(screenTitle("Widget"))
 
@@ -454,6 +463,370 @@ class MainActivity : Activity() {
         root.addView(bottomNav("Widget"))
     }
 
+
+    private fun showCleanupScreen() {
+        activeScreen = "Limpeza"
+        baseScreen()
+
+        root.addView(screenTitle("Limpeza"))
+
+        val memoryBox = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
+
+        val memoryTitle = TextView(this)
+        memoryTitle.text = "Otimização de memória"
+        memoryTitle.textSize = 20f
+        memoryTitle.setTypeface(null, Typeface.BOLD)
+        memoryTitle.setTextColor(mainText())
+        memoryBox.addView(memoryTitle)
+
+        val memoryInfo = TextView(this)
+        val data = Monitor.read(this)
+        memoryInfo.text = "RAM atual: ${data.memoryUsedPercent}% usada\nRAM livre: ${Monitor.format(data.memoryFree)}\n\nOtimização segura: atualiza a leitura, limpa cache interno do app e abre o gerenciador do Android quando necessário."
+        memoryInfo.textSize = 15f
+        memoryInfo.setTextColor(subText())
+        memoryInfo.setPadding(0, dp(12), 0, dp(12))
+        memoryBox.addView(memoryInfo)
+
+        val optimize = Button(this)
+        optimize.text = "OTIMIZAR MEMÓRIA AGORA"
+        optimize.setOnClickListener {
+            try {
+                cacheDir.deleteRecursively()
+                externalCacheDir?.deleteRecursively()
+            } catch (_: Exception) {}
+            MonitorWidgetProvider.updateAll(this)
+            Monitor.showNotification(this, greenLimit, yellowLimit)
+            Toast.makeText(this, "Otimização segura concluída", Toast.LENGTH_SHORT).show()
+            showCleanupScreen()
+        }
+        memoryBox.addView(optimize, buttonParams())
+
+        val androidStorage = Button(this)
+        androidStorage.text = "ABRIR ARMAZENAMENTO DO ANDROID"
+        androidStorage.setOnClickListener {
+            try {
+                startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+        memoryBox.addView(androidStorage, buttonParams())
+
+        root.addView(memoryBox)
+
+        val permissionBox = card(cardColor(), if (hasAllFilesAccess()) Color.rgb(58, 201, 78) else Color.rgb(255, 193, 7))
+
+        val permissionTitle = TextView(this)
+        permissionTitle.text = if (hasAllFilesAccess()) "Acesso aos arquivos liberado" else "Acesso aos arquivos necessário"
+        permissionTitle.textSize = 20f
+        permissionTitle.setTypeface(null, Typeface.BOLD)
+        permissionTitle.setTextColor(mainText())
+        permissionBox.addView(permissionTitle)
+
+        val permissionText = TextView(this)
+        permissionText.text = if (hasAllFilesAccess()) {
+            "O app já pode analisar arquivos grandes, recentes e sensíveis no armazenamento."
+        } else {
+            "Para encontrar arquivos como backups do WhatsApp, vídeos grandes, APKs e bancos de dados, libere acesso amplo aos arquivos. Nesta etapa o app apenas lista; ainda não apaga nada."
+        }
+        permissionText.textSize = 15f
+        permissionText.setTextColor(subText())
+        permissionText.setPadding(0, dp(12), 0, dp(12))
+        permissionBox.addView(permissionText)
+
+        val permissionButton = Button(this)
+        permissionButton.text = "LIBERAR ACESSO AOS ARQUIVOS"
+        permissionButton.setOnClickListener { requestAllFilesAccess() }
+        permissionBox.addView(permissionButton, buttonParams())
+
+        root.addView(permissionBox)
+
+        val status = TextView(this)
+        status.text = "Preparando análise..."
+        status.textSize = 15f
+        status.setTextColor(subText())
+        status.setPadding(0, dp(8), 0, dp(12))
+        root.addView(status)
+
+        val refreshButton = Button(this)
+        refreshButton.text = "ATUALIZAR LISTA AGORA"
+        root.addView(refreshButton, buttonParams())
+
+        val resultsBox = LinearLayout(this)
+        resultsBox.orientation = LinearLayout.VERTICAL
+        root.addView(resultsBox)
+
+        refreshButton.setOnClickListener {
+            startCleanupScan(resultsBox, status)
+        }
+
+        startCleanupScan(resultsBox, status)
+
+        root.addView(infoCard("Atualização automática", "Enquanto esta aba Limpeza estiver aberta, a lista será atualizada a cada 1 minuto para detectar arquivos novos ou modificados recentemente.\n\nNesta etapa, nada será apagado automaticamente."))
+
+        root.addView(bottomNav("Limpeza"))
+    }
+
+    private fun hasAllFilesAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
+
+    private fun requestAllFilesAccess() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val uri = Uri.parse("package:$packageName")
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri)
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "Acesso compatível com esta versão do Android", Toast.LENGTH_SHORT).show()
+            }
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+    }
+
+    private fun startCleanupScan(resultsBox: LinearLayout, status: TextView) {
+        resultsBox.removeAllViews()
+        status.text = "Analisando arquivos... aguarde."
+
+        thread {
+            val files = mutableListOf<CleanupFile>()
+            val roots = mutableListOf<File>()
+
+            try {
+                roots.add(Environment.getExternalStorageDirectory())
+            } catch (_: Exception) {}
+
+            val started = System.currentTimeMillis()
+            val maxFiles = 2500
+
+            fun scan(dir: File, depth: Int) {
+                if (files.size >= maxFiles) return
+                if (depth > 8) return
+                if (System.currentTimeMillis() - started > 25000) return
+
+                val list = try {
+                    dir.listFiles()
+                } catch (_: Exception) {
+                    null
+                } ?: return
+
+                for (f in list) {
+                    if (files.size >= maxFiles) return
+                    if (System.currentTimeMillis() - started > 25000) return
+
+                    try {
+                        if (f.isDirectory) {
+                            if (!f.name.startsWith(".")) scan(f, depth + 1)
+                        } else {
+                            val size = f.length()
+                            if (size > 0) {
+                                val path = f.absolutePath
+                                val sensitive = isSensitiveFile(f)
+                                val type = fileTypeLabel(f)
+                                files.add(CleanupFile(f.name, path, size, f.lastModified(), sensitive, type))
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            for (r in roots) {
+                if (r.exists()) scan(r, 0)
+            }
+
+            val largest = files.sortedByDescending { it.size }.take(25)
+            val recent = files.sortedByDescending { it.modified }.take(25)
+            val sensitive = files.filter { it.sensitive }.sortedWith(compareByDescending<CleanupFile> { it.modified }.thenByDescending { it.size }).take(30)
+
+            runOnUiThread {
+                if (activeScreen != "Limpeza") return@runOnUiThread
+
+                resultsBox.removeAllViews()
+                status.text = "Última análise: ${Monitor.time(System.currentTimeMillis())} • ${files.size} arquivos verificados"
+
+                resultsBox.addView(cleanupSection("Arquivos sensíveis", "Backups, bancos de dados, arquivos do WhatsApp, certificados, chaves e documentos pessoais.", sensitive))
+                resultsBox.addView(cleanupSection("Arquivos recentes", "Arquivos criados ou modificados mais recentemente.", recent))
+                resultsBox.addView(cleanupSection("Maiores arquivos", "Arquivos ordenados do maior para o menor.", largest))
+
+                handler.postDelayed({
+                    if (activeScreen == "Limpeza") startCleanupScan(resultsBox, status)
+                }, 60000)
+            }
+        }
+    }
+
+    private fun cleanupSection(title: String, subtitle: String, files: List<CleanupFile>): LinearLayout {
+        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
+
+        val t = TextView(this)
+        t.text = title
+        t.textSize = 20f
+        t.setTypeface(null, Typeface.BOLD)
+        t.setTextColor(mainText())
+        box.addView(t)
+
+        val s = TextView(this)
+        s.text = subtitle
+        s.textSize = 14f
+        s.setTextColor(subText())
+        s.setPadding(0, dp(6), 0, dp(12))
+        box.addView(s)
+
+        if (files.isEmpty()) {
+            val empty = TextView(this)
+            empty.text = "Nenhum arquivo encontrado nesta categoria."
+            empty.textSize = 15f
+            empty.setTextColor(subText())
+            box.addView(empty)
+            return box
+        }
+
+        for (f in files) {
+            box.addView(cleanupFileRow(f))
+        }
+
+        return box
+    }
+
+    private fun cleanupFileRow(file: CleanupFile): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.VERTICAL
+        row.setPadding(dp(10), dp(10), dp(10), dp(10))
+        row.background = rounded(
+            if (file.sensitive) {
+                if (isDark()) Color.rgb(55, 35, 28) else Color.rgb(255, 246, 232)
+            } else {
+                if (isDark()) Color.rgb(32, 38, 56) else Color.rgb(247, 249, 252)
+            },
+            if (file.sensitive) Color.rgb(255, 170, 80) else if (isDark()) Color.rgb(55, 65, 90) else Color.rgb(230, 235, 245),
+            dp(14)
+        )
+
+        val name = TextView(this)
+        name.text = if (file.sensitive) "⚠ ${file.name}" else file.name
+        name.textSize = 16f
+        name.setTypeface(null, Typeface.BOLD)
+        name.setTextColor(mainText())
+        row.addView(name)
+
+        val detail = TextView(this)
+        detail.text = "${file.type} • ${Monitor.format(file.size)} • ${Monitor.time(file.modified)}"
+        detail.textSize = 13f
+        detail.setTextColor(subText())
+        detail.setPadding(0, dp(4), 0, dp(4))
+        row.addView(detail)
+
+        val path = TextView(this)
+        path.text = file.path
+        path.textSize = 12f
+        path.setTextColor(subText())
+        row.addView(path)
+
+        if (file.sensitive) {
+            val warn = TextView(this)
+            warn.text = "Arquivo sensível: não excluir sem conferir. Pode conter backup, histórico, banco de dados ou documento importante."
+            warn.textSize = 12f
+            warn.setTextColor(Color.rgb(160, 80, 20))
+            warn.setPadding(0, dp(6), 0, 0)
+            row.addView(warn)
+        }
+
+        val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        params.setMargins(0, 0, 0, dp(8))
+        row.layoutParams = params
+
+        return row
+    }
+
+    private fun isSensitiveFile(file: File): Boolean {
+        val name = file.name.lowercase(Locale.ROOT)
+        val path = file.absolutePath.lowercase(Locale.ROOT)
+
+        val sensitiveWords = listOf(
+            "msgstore",
+            "wa.db",
+            "crypt",
+            "database",
+            "databases",
+            "backup",
+            "backups",
+            "senha",
+            "senhas",
+            "password",
+            "key",
+            "keystore",
+            "certificate",
+            "certificado",
+            "token",
+            "auth",
+            "pix",
+            "banco",
+            "extrato",
+            "contrato",
+            "documento",
+            "rg",
+            "cpf",
+            "cnh",
+            "irpf",
+            "receita",
+            "imposto",
+            "nota fiscal",
+            "nfe"
+        )
+
+        val sensitiveExtensions = listOf(
+            ".db",
+            ".sqlite",
+            ".sqlite3",
+            ".crypt",
+            ".crypt12",
+            ".crypt14",
+            ".bak",
+            ".backup",
+            ".key",
+            ".pem",
+            ".p12",
+            ".pfx",
+            ".cer",
+            ".crt"
+        )
+
+        if (path.contains("/android/media/com.whatsapp/")) return true
+        if (path.contains("/whatsapp/databases/")) return true
+        if (sensitiveWords.any { path.contains(it) }) return true
+        if (sensitiveExtensions.any { name.endsWith(it) }) return true
+
+        return false
+    }
+
+    private fun fileTypeLabel(file: File): String {
+        val name = file.name.lowercase(Locale.ROOT)
+        val path = file.absolutePath.lowercase(Locale.ROOT)
+
+        return when {
+            path.contains("whatsapp") && name.contains("msgstore") -> "Backup criptografado do WhatsApp"
+            path.contains("whatsapp") -> "Arquivo do WhatsApp"
+            name.endsWith(".mp4") || name.endsWith(".mkv") || name.endsWith(".mov") || name.endsWith(".avi") -> "Vídeo"
+            name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") -> "Imagem"
+            name.endsWith(".apk") -> "Instalador APK"
+            name.endsWith(".pdf") -> "PDF"
+            name.endsWith(".doc") || name.endsWith(".docx") -> "Documento Word"
+            name.endsWith(".xls") || name.endsWith(".xlsx") -> "Planilha"
+            name.endsWith(".zip") || name.endsWith(".rar") || name.endsWith(".7z") -> "Arquivo compactado"
+            name.endsWith(".db") || name.endsWith(".sqlite") || name.contains("crypt") -> "Banco de dados / backup"
+            else -> "Arquivo"
+        }
+    }
+
     private fun bottomNav(active: String): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
@@ -463,6 +836,7 @@ class MainActivity : Activity() {
 
         nav.addView(navItem("📊\nPainel", active == "Painel") { showPanelScreen() })
         nav.addView(navItem("▦\nWidget", active == "Widget") { showWidgetScreen() })
+        nav.addView(navItem("🧹\nLimpeza", active == "Limpeza") { showCleanupScreen() })
         nav.addView(navItem("⚙\nConfig.", active == "Config.") { showConfigScreen() })
 
         val navParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -632,6 +1006,15 @@ class MainActivity : Activity() {
         }
     }
 }
+
+data class CleanupFile(
+    val name: String,
+    val path: String,
+    val size: Long,
+    val modified: Long,
+    val sensitive: Boolean,
+    val type: String
+)
 
 data class MonitorData(
     val storageTotal: Long,
