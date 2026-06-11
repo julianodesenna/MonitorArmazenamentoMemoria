@@ -1068,8 +1068,7 @@ class MainActivity : Activity() {
 
         nav.addView(navItem("📊\nPainel", active == "Painel") { showPanelScreen() })
         nav.addView(navItem("▦\nWidget", active == "Widget") { showWidgetScreen() })
-        nav.addView(navItem("🧹
-Limpeza", active == "Limpeza") { startActivity(Intent(this, CleanupActivity::class.java)) })
+        nav.addView(navItem("🧹\nLimpeza", active == "Limpeza") { startActivity(Intent(this, CleanupActivity::class.java)) })
         nav.addView(navItem("⚙\nConfig.", active == "Config.") { showConfigScreen() })
 
         val navParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
