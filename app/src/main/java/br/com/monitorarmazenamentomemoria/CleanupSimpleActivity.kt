@@ -32,6 +32,8 @@ class CleanupSimpleActivity : Activity() {
     private var minSizeMb = 10
     private var orderMode = "size"
     private var allFiles: List<FileItem> = emptyList()
+    private val selectedFiles = mutableSetOf<String>()
+    private lateinit var selectedInfoText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -256,6 +258,46 @@ class CleanupSimpleActivity : Activity() {
 
         val files = ordered(categoryFiles(categoryTitle)).take(80)
 
+        val selectionBox = card()
+        selectionBox.addView(titleText("Seleção"))
+
+        selectedInfoText = TextView(this)
+        selectedInfoText.textSize = 14f
+        selectedInfoText.setTextColor(Color.rgb(80, 90, 110))
+        selectedInfoText.setPadding(0, dp(6), 0, dp(8))
+        selectionBox.addView(selectedInfoText)
+
+        val selectionRow = LinearLayout(this)
+        selectionRow.orientation = LinearLayout.HORIZONTAL
+
+        val selectShown = Button(this)
+        selectShown.text = "Selecionar exibidos"
+        selectShown.setOnClickListener {
+            files.forEach { selectedFiles.add(it.path) }
+            showCategory(categoryTitle, categoryDesc)
+        }
+
+        val clearSelection = Button(this)
+        clearSelection.text = "Limpar"
+        clearSelection.setOnClickListener {
+            selectedFiles.clear()
+            showCategory(categoryTitle, categoryDesc)
+        }
+
+        selectionRow.addView(selectShown, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        selectionRow.addView(clearSelection, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        selectionBox.addView(selectionRow)
+
+        val shareSelected = Button(this)
+        shareSelected.text = "Compartilhar selecionados"
+        shareSelected.setOnClickListener {
+            shareSelectedFiles()
+        }
+        selectionBox.addView(shareSelected)
+
+        root.addView(selectionBox)
+        updateSelectedInfo()
+
         val summary = TextView(this)
         summary.text = "${files.size} arquivos mostrados • ${formatSize(files.sumOf { it.size })}"
         summary.textSize = 14f
@@ -314,6 +356,15 @@ class CleanupSimpleActivity : Activity() {
         path.textSize = 12f
         path.setTextColor(Color.rgb(110, 120, 140))
         box.addView(path)
+
+        val check = CheckBox(this)
+        check.text = "Selecionar"
+        check.isChecked = selectedFiles.contains(item.path)
+        check.setOnCheckedChangeListener { _, checked ->
+            if (checked) selectedFiles.add(item.path) else selectedFiles.remove(item.path)
+            updateSelectedInfo()
+        }
+        box.addView(check)
 
         box.setOnClickListener {
             AlertDialog.Builder(this)
