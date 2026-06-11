@@ -7,17 +7,31 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.*
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.concurrent.thread
 
 class CleanupSimpleActivity : Activity() {
 
     private lateinit var root: LinearLayout
+    private lateinit var statusText: TextView
+
+    private var currentCategory = ""
+    private var minSizeMb = 10
+    private var orderMode = "size"
+    private var allFiles: List<FileItem> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildScreen()
+        scanFiles()
+        drawHome()
     }
 
     private fun buildScreen() {
@@ -39,11 +53,10 @@ class CleanupSimpleActivity : Activity() {
 
         main.addView(bottomNav())
         setContentView(main)
-
-        drawHome()
     }
 
     private fun drawHome() {
+        currentCategory = ""
         root.removeAllViews()
 
         val data = Monitor.read(this)
@@ -55,16 +68,15 @@ class CleanupSimpleActivity : Activity() {
         title.setTextColor(Color.rgb(14, 26, 56))
         root.addView(title)
 
-        val subtitle = TextView(this)
-        subtitle.text = "Gerenciador visual de arquivos"
-        subtitle.textSize = 15f
-        subtitle.setTextColor(Color.rgb(80, 90, 110))
-        subtitle.setPadding(0, dp(4), 0, dp(14))
-        root.addView(subtitle)
+        statusText = TextView(this)
+        statusText.text = if (allFiles.isEmpty()) "Analisando arquivos..." else "${allFiles.size} arquivos analisados"
+        statusText.textSize = 14f
+        statusText.setTextColor(Color.rgb(80, 90, 110))
+        statusText.setPadding(0, dp(4), 0, dp(14))
+        root.addView(statusText)
 
         val summary = card()
-        val summaryTitle = titleText("Resumo do aparelho")
-        summary.addView(summaryTitle)
+        summary.addView(titleText("Resumo do aparelho"))
 
         val summaryBody = TextView(this)
         summaryBody.text =
@@ -76,7 +88,6 @@ class CleanupSimpleActivity : Activity() {
         summaryBody.setTextColor(Color.rgb(70, 80, 100))
         summaryBody.setPadding(0, dp(8), 0, 0)
         summary.addView(summaryBody)
-
         root.addView(summary)
 
         val actions = card()
@@ -88,9 +99,8 @@ class CleanupSimpleActivity : Activity() {
         val update = Button(this)
         update.text = "Atualizar"
         update.setOnClickListener {
-            MonitorWidgetProvider.updateAll(this)
-            Toast.makeText(this, "Leitura atualizada", Toast.LENGTH_SHORT).show()
-            drawHome()
+            scanFiles()
+            Toast.makeText(this, "Analisando arquivos novamente", Toast.LENGTH_SHORT).show()
         }
 
         val androidStorage = Button(this)
@@ -107,22 +117,6 @@ class CleanupSimpleActivity : Activity() {
         row.addView(androidStorage, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         actions.addView(row)
 
-        val memory = Button(this)
-        memory.text = "Analisar memória"
-        memory.setOnClickListener {
-            val now = Monitor.read(this)
-            AlertDialog.Builder(this)
-                .setTitle("Análise de memória")
-                .setMessage(
-                    "RAM usada: ${now.memoryUsedPercent}%\n" +
-                    "RAM livre: ${Monitor.format(now.memoryFree)}\n\n" +
-                    "O Android gerencia a RAM automaticamente. Esta função atualiza a leitura e ajuda você a acompanhar o uso."
-                )
-                .setPositiveButton("OK", null)
-                .show()
-        }
-        actions.addView(memory)
-
         root.addView(actions)
 
         val categoriesTitle = TextView(this)
@@ -133,23 +127,11 @@ class CleanupSimpleActivity : Activity() {
         categoriesTitle.setPadding(0, dp(8), 0, dp(10))
         root.addView(categoriesTitle)
 
-        addCategoryRow("📦", "Arquivos grandes", "Encontrar arquivos pesados", "🎬", "Vídeos", "Filtrar vídeos grandes")
-        addCategoryRow("🖼", "Imagens", "Fotos e imagens grandes", "🎵", "Áudios", "Áudios e mensagens de voz")
-        addCategoryRow("💬", "WhatsApp", "Mídias e backups do WhatsApp", "🗄", "Backups", "Bancos de dados e cópias")
-        addCategoryRow("🕒", "Recentes", "Arquivos que entraram recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
+        addCategoryRow("📦", "Arquivos grandes", "Arquivos acima do filtro", "🎬", "Vídeos", "Filtrar vídeos")
+        addCategoryRow("🖼", "Imagens", "Fotos e imagens", "🎵", "Áudios", "Áudios e mensagens de voz")
+        addCategoryRow("💬", "WhatsApp", "Mídias e backups", "🗄", "Backups", "Bancos de dados e cópias")
+        addCategoryRow("🕒", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
         addCategoryRow("⬇", "Downloads", "Arquivos baixados", "📱", "APKs", "Instaladores antigos")
-
-        val note = card()
-        note.addView(titleText("Próxima etapa"))
-        val noteText = TextView(this)
-        noteText.text =
-            "Nesta versão, organizamos a Limpeza como gerenciador visual.\n\n" +
-            "Na próxima etapa segura, cada categoria vai abrir uma lista filtrada com arquivos reais, tamanho, data, local e botão Abrir."
-        noteText.textSize = 15f
-        noteText.setTextColor(Color.rgb(70, 80, 100))
-        noteText.setPadding(0, dp(8), 0, 0)
-        note.addView(noteText)
-        root.addView(note)
     }
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
@@ -161,6 +143,9 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun categoryCard(icon: String, title: String, desc: String): LinearLayout {
+        val files = categoryFiles(title)
+        val total = files.sumOf { it.size }
+
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -174,7 +159,7 @@ class CleanupSimpleActivity : Activity() {
         box.addView(t)
 
         val d = TextView(this)
-        d.text = desc
+        d.text = "$desc\n${files.size} arquivos • ${formatSize(total)}"
         d.textSize = 13f
         d.setTextColor(Color.rgb(80, 90, 110))
         d.setPadding(0, dp(6), 0, 0)
@@ -194,8 +179,8 @@ class CleanupSimpleActivity : Activity() {
         return box
     }
 
-
     private fun showCategory(categoryTitle: String, categoryDesc: String) {
+        currentCategory = categoryTitle
         root.removeAllViews()
 
         val back = Button(this)
@@ -224,17 +209,9 @@ class CleanupSimpleActivity : Activity() {
         val sizeRow = LinearLayout(this)
         sizeRow.orientation = LinearLayout.HORIZONTAL
 
-        val f10 = Button(this)
-        f10.text = "+10 MB"
-        f10.setOnClickListener { showFilterMessage(categoryTitle, "+10 MB") }
-
-        val f50 = Button(this)
-        f50.text = "+50 MB"
-        f50.setOnClickListener { showFilterMessage(categoryTitle, "+50 MB") }
-
-        val f100 = Button(this)
-        f100.text = "+100 MB"
-        f100.setOnClickListener { showFilterMessage(categoryTitle, "+100 MB") }
+        val f10 = filterButton("+10 MB", 10)
+        val f50 = filterButton("+50 MB", 50)
+        val f100 = filterButton("+100 MB", 100)
 
         sizeRow.addView(f10, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         sizeRow.addView(f50, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -245,12 +222,18 @@ class CleanupSimpleActivity : Activity() {
         orderRow.orientation = LinearLayout.HORIZONTAL
 
         val maior = Button(this)
-        maior.text = "Maior primeiro"
-        maior.setOnClickListener { showFilterMessage(categoryTitle, "Maior primeiro") }
+        maior.text = if (orderMode == "size") "✓ Maior primeiro" else "Maior primeiro"
+        maior.setOnClickListener {
+            orderMode = "size"
+            showCategory(categoryTitle, categoryDesc)
+        }
 
         val recente = Button(this)
-        recente.text = "Mais recente"
-        recente.setOnClickListener { showFilterMessage(categoryTitle, "Mais recente") }
+        recente.text = if (orderMode == "date") "✓ Mais recente" else "Mais recente"
+        recente.setOnClickListener {
+            orderMode = "date"
+            showCategory(categoryTitle, categoryDesc)
+        }
 
         orderRow.addView(maior, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         orderRow.addView(recente, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -258,31 +241,236 @@ class CleanupSimpleActivity : Activity() {
 
         root.addView(filter)
 
-        val preview = card()
-        preview.addView(titleText("Lista de arquivos"))
+        val files = ordered(categoryFiles(categoryTitle)).take(80)
 
-        val info = TextView(this)
-        info.text =
-            "A estrutura da categoria está pronta.\\n\\n" +
-            "Na próxima etapa segura, esta tela vai receber os arquivos reais encontrados no armazenamento, com:\\n\\n" +
-            "• nome do arquivo\\n" +
-            "• tamanho real\\n" +
-            "• data de modificação\\n" +
-            "• local/pasta\\n" +
-            "• botão Abrir\\n" +
-            "• botão Detalhes"
-        info.textSize = 15f
-        info.setTextColor(Color.rgb(70, 80, 100))
-        info.setPadding(0, dp(8), 0, 0)
-        preview.addView(info)
+        val summary = TextView(this)
+        summary.text = "${files.size} arquivos mostrados • ${formatSize(files.sumOf { it.size })}"
+        summary.textSize = 14f
+        summary.setTextColor(Color.rgb(80, 90, 110))
+        summary.setPadding(0, dp(4), 0, dp(12))
+        root.addView(summary)
 
-        root.addView(preview)
+        if (files.isEmpty()) {
+            val empty = card()
+            empty.addView(titleText("Nenhum arquivo encontrado"))
+            val body = TextView(this)
+            body.text = "Tente outro filtro ou toque em Atualizar na tela principal."
+            body.textSize = 15f
+            body.setTextColor(Color.rgb(70, 80, 100))
+            body.setPadding(0, dp(8), 0, 0)
+            empty.addView(body)
+            root.addView(empty)
+            return
+        }
+
+        for (file in files) {
+            root.addView(fileRow(file))
+        }
     }
 
-    private fun showFilterMessage(categoryTitle: String, filterName: String) {
-        Toast.makeText(this, "$categoryTitle • $filterName", Toast.LENGTH_SHORT).show()
+    private fun filterButton(label: String, mb: Int): Button {
+        return Button(this).apply {
+            text = if (minSizeMb == mb) "✓ $label" else label
+            setOnClickListener {
+                minSizeMb = mb
+                if (currentCategory.isNotBlank()) showCategory(currentCategory, "")
+                else drawHome()
+            }
+        }
     }
 
+    private fun fileRow(item: FileItem): LinearLayout {
+        val box = card()
+
+        val name = TextView(this)
+        name.text = if (item.risk == "alto") "⚠ ${item.name}" else item.name
+        name.textSize = 16f
+        name.setTypeface(null, Typeface.BOLD)
+        name.setTextColor(Color.rgb(14, 26, 56))
+        box.addView(name)
+
+        val detail = TextView(this)
+        detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
+        detail.textSize = 13f
+        detail.setTextColor(Color.rgb(80, 90, 110))
+        detail.setPadding(0, dp(4), 0, dp(4))
+        box.addView(detail)
+
+        val path = TextView(this)
+        path.text = item.path
+        path.textSize = 12f
+        path.setTextColor(Color.rgb(110, 120, 140))
+        box.addView(path)
+
+        box.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(item.name)
+                .setMessage(
+                    "Tipo: ${item.type}\n" +
+                    "Tamanho: ${formatSize(item.size)}\n" +
+                    "Modificado: ${formatDate(item.modified)}\n" +
+                    "Risco: ${if (item.risk == "alto") "alto" else "normal"}\n\n" +
+                    "Local:\n${item.path}\n\n" +
+                    "Na próxima etapa vamos colocar botão Abrir."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+        }
+
+        return box
+    }
+
+    private fun scanFiles() {
+        thread {
+            val result = mutableListOf<FileItem>()
+            val started = System.currentTimeMillis()
+            val maxFiles = 8000
+
+            fun scan(dir: File, depth: Int) {
+                if (result.size >= maxFiles) return
+                if (depth > 10) return
+                if (System.currentTimeMillis() - started > 30000) return
+
+                val list = try { dir.listFiles() } catch (_: Exception) { null } ?: return
+
+                for (f in list) {
+                    if (result.size >= maxFiles) return
+                    if (System.currentTimeMillis() - started > 30000) return
+
+                    try {
+                        if (f.isDirectory) {
+                            if (!f.name.startsWith(".")) scan(f, depth + 1)
+                        } else {
+                            result.add(
+                                FileItem(
+                                    name = f.name,
+                                    path = f.absolutePath,
+                                    size = f.length(),
+                                    modified = f.lastModified(),
+                                    type = fileType(f),
+                                    category = fileCategory(f),
+                                    risk = fileRisk(f)
+                                )
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            for (rootDir in importantRoots()) {
+                if (rootDir.exists()) scan(rootDir, 0)
+            }
+
+            allFiles = result.distinctBy { it.path }
+
+            runOnUiThread {
+                if (currentCategory.isBlank()) drawHome()
+                else showCategory(currentCategory, "")
+            }
+        }
+    }
+
+    private fun importantRoots(): List<File> {
+        val base = Environment.getExternalStorageDirectory()
+        return listOf(
+            File(base, "Download"),
+            File(base, "Downloads"),
+            File(base, "DCIM"),
+            File(base, "Movies"),
+            File(base, "Pictures"),
+            File(base, "WhatsApp"),
+            File(base, "Android/media/com.whatsapp"),
+            File(base, "Android/media"),
+            base
+        ).distinctBy { it.absolutePath }
+    }
+
+    private fun categoryFiles(category: String): List<FileItem> {
+        val minBytes = minSizeMb.toLong() * 1024L * 1024L
+
+        return when (category) {
+            "Arquivos grandes" -> allFiles.filter { it.size >= minBytes }
+            "Vídeos" -> allFiles.filter { it.category == "Vídeos" && it.size >= minBytes }
+            "Imagens" -> allFiles.filter { it.category == "Imagens" && it.size >= minBytes }
+            "Áudios" -> allFiles.filter { it.category == "Áudios" }
+            "WhatsApp" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("whatsapp") }
+            "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" }
+            "Recentes" -> allFiles.sortedByDescending { it.modified }.take(200)
+            "Sensíveis" -> allFiles.filter { it.risk == "alto" }
+            "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
+            "APKs" -> allFiles.filter { it.category == "APKs" }
+            else -> allFiles
+        }
+    }
+
+    private fun ordered(files: List<FileItem>): List<FileItem> {
+        return if (orderMode == "date") files.sortedByDescending { it.modified }
+        else files.sortedByDescending { it.size }
+    }
+
+    private fun fileCategory(file: File): String {
+        val n = file.name.lowercase(Locale.ROOT)
+        val p = file.absolutePath.lowercase(Locale.ROOT)
+
+        return when {
+            p.contains("whatsapp") && (n.contains("msgstore") || p.contains("/databases/")) -> "Backups do WhatsApp"
+            p.contains("whatsapp") -> "WhatsApp"
+            n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") || n.endsWith(".avi") -> "Vídeos"
+            n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") -> "Imagens"
+            n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".wav") -> "Áudios"
+            n.endsWith(".apk") -> "APKs"
+            n.endsWith(".db") || n.endsWith(".sqlite") || n.contains("crypt") || n.endsWith(".bak") || n.endsWith(".backup") -> "Backups"
+            else -> "Outros"
+        }
+    }
+
+    private fun fileType(file: File): String {
+        val n = file.name.lowercase(Locale.ROOT)
+        val p = file.absolutePath.lowercase(Locale.ROOT)
+
+        return when {
+            p.contains("whatsapp") && n.contains("msgstore") -> "Backup criptografado do WhatsApp"
+            p.contains("whatsapp") && n.endsWith(".opus") -> "Áudio do WhatsApp"
+            p.contains("whatsapp") && n.endsWith(".mp4") -> "Vídeo do WhatsApp"
+            p.contains("whatsapp") -> "Arquivo do WhatsApp"
+            n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") -> "Vídeo"
+            n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") -> "Imagem"
+            n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") -> "Áudio"
+            n.endsWith(".apk") -> "APK"
+            n.endsWith(".pdf") -> "PDF"
+            n.endsWith(".db") || n.contains("crypt") -> "Banco de dados / backup"
+            else -> "Arquivo"
+        }
+    }
+
+    private fun fileRisk(file: File): String {
+        val n = file.name.lowercase(Locale.ROOT)
+        val p = file.absolutePath.lowercase(Locale.ROOT)
+
+        val high = listOf("msgstore", "wa.db", "database", "databases", "backup", "keystore", "certificate", "certificado", "token", "auth", "senha", "password", "cpf", "rg", "cnh", "contrato", "extrato")
+        val ext = listOf(".db", ".sqlite", ".crypt", ".crypt12", ".crypt14", ".bak", ".backup", ".key", ".pem", ".p12", ".pfx")
+
+        if (high.any { p.contains(it) }) return "alto"
+        if (ext.any { n.endsWith(it) }) return "alto"
+        return "normal"
+    }
+
+    private fun formatSize(bytes: Long): String {
+        if (bytes <= 0L) return "tamanho não identificado"
+        val kb = bytes.toDouble() / 1024.0
+        val mb = kb / 1024.0
+        val gb = mb / 1024.0
+        return when {
+            gb >= 1.0 -> String.format(Locale("pt", "BR"), "%.2f GB", gb)
+            mb >= 1.0 -> String.format(Locale("pt", "BR"), "%.2f MB", mb)
+            kb >= 1.0 -> String.format(Locale("pt", "BR"), "%.0f KB", kb)
+            else -> "$bytes B"
+        }
+    }
+
+    private fun formatDate(ms: Long): String {
+        return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(ms))
+    }
 
     private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
@@ -359,3 +547,13 @@ class CleanupSimpleActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
+
+data class FileItem(
+    val name: String,
+    val path: String,
+    val size: Long,
+    val modified: Long,
+    val type: String,
+    val category: String,
+    val risk: String
+)
