@@ -4,36 +4,27 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="12dp"
     android:background="#FFFFFF">
 
     <TextView
         android:id="@+id/widgetTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Monitor do aparelho"
+        android:text="Monitor"
         android:textStyle="bold"
-        android:textSize="16sp"
+        android:textSize="15sp"
         android:textColor="#0E1A38" />
 
     <TextView
         android:id="@+id/widgetStorage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Armaz. 0%"
+        android:text="ARM 0%"
         android:textStyle="bold"
         android:textSize="15sp"
-        android:textColor="#0E1A38"
-        android:layout_marginTop="10dp" />
-
-    <ProgressBar
-        android:id="@+id/widgetStorageBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="10dp"
-        android:max="100"
-        android:progress="0"
-        android:layout_marginTop="4dp" />
+        android:textColor="#FFC107"
+        android:layout_marginTop="8dp" />
 
     <TextView
         android:id="@+id/widgetMemory"
@@ -42,16 +33,7 @@
         android:text="RAM 0%"
         android:textStyle="bold"
         android:textSize="15sp"
-        android:textColor="#0E1A38"
-        android:layout_marginTop="10dp" />
-
-    <ProgressBar
-        android:id="@+id/widgetMemoryBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="10dp"
-        android:max="100"
-        android:progress="0"
+        android:textColor="#3AC94E"
         android:layout_marginTop="4dp" />
 
     <TextView
@@ -59,28 +41,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Livre: --"
-        android:textSize="13sp"
+        android:textSize="12sp"
         android:textColor="#455064"
-        android:layout_marginTop="10dp" />
+        android:layout_marginTop="6dp" />
 
     <TextView
         android:id="@+id/widgetUpdated"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Atualizado agora"
-        android:textSize="12sp"
+        android:text="toque para abrir"
+        android:textSize="11sp"
         android:textColor="#235CAA"
-        android:layout_marginTop="4dp" />
-
-    <TextView
-        android:id="@+id/widgetRefresh"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="↻ Toque para atualizar"
-        android:textSize="12sp"
-        android:textColor="#235CAA"
-        android:gravity="center"
-        android:layout_marginTop="8dp"
-        android:padding="6dp" />
+        android:layout_marginTop="3dp" />
 
 </LinearLayout>

@@ -3,6 +3,7 @@ package br.com.monitorarmazenamentomemoria
 import android.Manifest
 import android.app.*
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -34,6 +35,7 @@ class MainActivity : Activity() {
     private var greenLimit = 89
     private var yellowLimit = 96
     private var notificationEnabled = true
+    private var themeMode = "auto"
 
     private lateinit var root: LinearLayout
     private lateinit var scroll: ScrollView
@@ -70,6 +72,7 @@ class MainActivity : Activity() {
         Monitor.createChannel(this)
         Monitor.schedule(this)
         requestNotificationPermission()
+        startMonitorService()
         showPanelScreen()
     }
 
@@ -87,6 +90,7 @@ class MainActivity : Activity() {
         greenLimit = prefs.getInt("greenLimit", 89)
         yellowLimit = prefs.getInt("yellowLimit", 96)
         notificationEnabled = prefs.getBoolean("notificationEnabled", true)
+        themeMode = prefs.getString("themeMode", "auto") ?: "auto"
     }
 
     private fun saveSettings() {
@@ -94,12 +98,41 @@ class MainActivity : Activity() {
             .putInt("greenLimit", greenLimit)
             .putInt("yellowLimit", yellowLimit)
             .putBoolean("notificationEnabled", notificationEnabled)
+            .putString("themeMode", themeMode)
             .apply()
     }
 
+    private fun startMonitorService() {
+        if (notificationEnabled) {
+            val intent = Intent(this, MonitorService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+        }
+    }
+
+    private fun stopMonitorService() {
+        stopService(Intent(this, MonitorService::class.java))
+    }
+
+    private fun isDark(): Boolean {
+        return when (themeMode) {
+            "dark" -> true
+            "light" -> false
+            else -> {
+                val night = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                night == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            }
+        }
+    }
+
+    private fun bgColor() = if (isDark()) Color.rgb(12, 16, 28) else Color.rgb(246, 248, 252)
+    private fun cardColor() = if (isDark()) Color.rgb(25, 31, 48) else Color.WHITE
+    private fun mainText() = if (isDark()) Color.WHITE else Color.rgb(14, 26, 56)
+    private fun subText() = if (isDark()) Color.rgb(190, 200, 220) else Color.rgb(80, 90, 110)
+
     private fun baseScreen() {
         scroll = ScrollView(this)
-        scroll.setBackgroundColor(Color.rgb(246, 248, 252))
+        scroll.setBackgroundColor(bgColor())
 
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
@@ -118,7 +151,7 @@ class MainActivity : Activity() {
         title.textSize = 24f
         title.setTypeface(null, Typeface.BOLD)
         title.gravity = Gravity.CENTER
-        title.setTextColor(Color.rgb(14, 26, 56))
+        title.setTextColor(mainText())
         root.addView(title)
 
         timeText = TextView(this)
@@ -128,7 +161,7 @@ class MainActivity : Activity() {
         timeText.setPadding(0, dp(8), 0, dp(18))
         root.addView(timeText)
 
-        val storageCard = card(Color.rgb(255, 252, 240), Color.rgb(255, 193, 7))
+        val storageCard = card(if (isDark()) Color.rgb(39, 33, 18) else Color.rgb(255, 252, 240), Color.rgb(255, 193, 7))
         storageCard.addView(cardHeader("💾", "ARMAZENAMENTO", true))
         storagePercent = percentText()
         storageStatus = pillText()
@@ -142,7 +175,7 @@ class MainActivity : Activity() {
         storageCard.addView(metricsRow("Capacidade total", storageTotal, "Usado", storageUsed, "Livre", storageFree))
         root.addView(storageCard)
 
-        val memoryCard = card(Color.rgb(244, 255, 246), Color.rgb(58, 201, 78))
+        val memoryCard = card(if (isDark()) Color.rgb(18, 38, 24) else Color.rgb(244, 255, 246), Color.rgb(58, 201, 78))
         memoryCard.addView(cardHeader("🧠", "MEMÓRIA RAM", false))
         memoryPercent = percentText()
         memoryStatus = pillText()
@@ -158,13 +191,10 @@ class MainActivity : Activity() {
 
         alertText = TextView(this)
         alertText.textSize = 16f
-        alertText.setTextColor(Color.rgb(130, 42, 32))
+        alertText.setTextColor(if (isDark()) Color.rgb(255, 190, 180) else Color.rgb(130, 42, 32))
         alertText.setPadding(dp(18), dp(16), dp(18), dp(16))
-        alertText.background = rounded(Color.rgb(255, 238, 232), Color.rgb(255, 170, 150), dp(16))
-        val alertParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
+        alertText.background = rounded(if (isDark()) Color.rgb(55, 28, 24) else Color.rgb(255, 238, 232), Color.rgb(255, 170, 150), dp(16))
+        val alertParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         alertParams.setMargins(0, dp(12), 0, dp(12))
         root.addView(alertText, alertParams)
 
@@ -174,16 +204,18 @@ class MainActivity : Activity() {
         root.addView(refresh, buttonParams())
 
         val notify = Button(this)
-        notify.text = if (notificationEnabled) "NOTIFICAÇÃO FIXA ATIVADA" else "ATIVAR NOTIFICAÇÃO FIXA"
+        notify.text = if (notificationEnabled) "MONITORAMENTO ATIVO" else "ATIVAR MONITORAMENTO"
         notify.setOnClickListener {
             notificationEnabled = !notificationEnabled
             saveSettings()
             if (notificationEnabled) {
+                startMonitorService()
                 Monitor.showNotification(this, greenLimit, yellowLimit)
-                Toast.makeText(this, "Notificação ativada", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Monitoramento ativado", Toast.LENGTH_SHORT).show()
             } else {
+                stopMonitorService()
                 NotificationManagerCompat.from(this).cancel(1001)
-                Toast.makeText(this, "Notificação desativada", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Monitoramento desativado", Toast.LENGTH_SHORT).show()
             }
             showPanelScreen()
         }
@@ -196,33 +228,8 @@ class MainActivity : Activity() {
     private fun updateInfo() {
         val data = Monitor.read(this)
 
-        applyData(
-            data.storageUsedPercent,
-            storagePercent,
-            storageStatus,
-            storageBar,
-            storageTotal,
-            storageUsed,
-            storageFree,
-            data.storageTotal,
-            data.storageUsed,
-            data.storageFree,
-            true
-        )
-
-        applyData(
-            data.memoryUsedPercent,
-            memoryPercent,
-            memoryStatus,
-            memoryBar,
-            memoryTotal,
-            memoryUsed,
-            memoryFree,
-            data.memoryTotal,
-            data.memoryUsed,
-            data.memoryFree,
-            false
-        )
+        applyData(data.storageUsedPercent, storagePercent, storageStatus, storageBar, storageTotal, storageUsed, storageFree, data.storageTotal, data.storageUsed, data.storageFree, true)
+        applyData(data.memoryUsedPercent, memoryPercent, memoryStatus, memoryBar, memoryTotal, memoryUsed, memoryFree, data.memoryTotal, data.memoryUsed, data.memoryFree, false)
 
         alertText.text = if (data.storageUsedPercent > greenLimit) {
             "⚠ Alerta: armazenamento acima de $greenLimit%. Recomendado liberar espaço."
@@ -232,25 +239,11 @@ class MainActivity : Activity() {
 
         timeText.text = "◉ Atualizado: ${Monitor.time(data.readAt)}"
 
-        if (notificationEnabled) {
-            Monitor.showNotification(this, greenLimit, yellowLimit)
-        }
+        if (notificationEnabled) Monitor.showNotification(this, greenLimit, yellowLimit)
         MonitorWidgetProvider.updateAll(this)
     }
 
-    private fun applyData(
-        percent: Int,
-        percentText: TextView,
-        statusText: TextView,
-        bar: ProgressBar,
-        totalView: TextView,
-        usedView: TextView,
-        freeView: TextView,
-        total: Long,
-        used: Long,
-        free: Long,
-        isStorage: Boolean
-    ) {
+    private fun applyData(percent: Int, percentText: TextView, statusText: TextView, bar: ProgressBar, totalView: TextView, usedView: TextView, freeView: TextView, total: Long, used: Long, free: Long, isStorage: Boolean) {
         val color = Monitor.statusColor(percent, greenLimit, yellowLimit)
         val label = Monitor.statusLabel(percent, greenLimit, yellowLimit)
 
@@ -261,7 +254,7 @@ class MainActivity : Activity() {
 
         bar.progress = percent
         bar.progressTintList = ColorStateList.valueOf(color)
-        bar.progressBackgroundTintList = ColorStateList.valueOf(Color.rgb(226, 230, 235))
+        bar.progressBackgroundTintList = ColorStateList.valueOf(if (isDark()) Color.rgb(65, 70, 85) else Color.rgb(226, 230, 235))
 
         totalView.text = Monitor.format(total)
         usedView.text = Monitor.format(used)
@@ -271,18 +264,10 @@ class MainActivity : Activity() {
     private fun showConfigScreen() {
         baseScreen()
 
-        val title = screenTitle("Configurações")
-        root.addView(title)
-
+        root.addView(screenTitle("Configurações"))
         root.addView(configCard())
-
-        val info = infoCard(
-            "Atualização",
-            "Tela aberta: a cada 30 segundos\n" +
-            "Segundo plano: controlado pelo Android\n" +
-            "Notificação fixa: ${if (notificationEnabled) "ativada" else "desativada"}"
-        )
-        root.addView(info)
+        root.addView(themeCard())
+        root.addView(infoCard("Atualização", "Tela aberta: a cada 30 segundos\nServiço ativo: atualiza notificação e widget em segundo plano\nWidget: toque nele para abrir o painel elegante"))
 
         val reset = Button(this)
         reset.text = "RESTAURAR PADRÃO"
@@ -290,7 +275,9 @@ class MainActivity : Activity() {
             greenLimit = 89
             yellowLimit = 96
             notificationEnabled = true
+            themeMode = "auto"
             saveSettings()
+            startMonitorService()
             Toast.makeText(this, "Padrão restaurado", Toast.LENGTH_SHORT).show()
             showConfigScreen()
         }
@@ -300,13 +287,12 @@ class MainActivity : Activity() {
     }
 
     private fun configCard(): LinearLayout {
-        val box = card(Color.WHITE, Color.rgb(225, 230, 240))
-
+        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
         val h = TextView(this)
         h.text = "Cores e Limites"
         h.textSize = 20f
         h.setTypeface(null, Typeface.BOLD)
-        h.setTextColor(Color.rgb(14, 26, 56))
+        h.setTextColor(mainText())
         h.setPadding(0, 0, 0, dp(14))
         box.addView(h)
 
@@ -314,34 +300,66 @@ class MainActivity : Activity() {
             greenLimit = it
             if (yellowLimit <= greenLimit) yellowLimit = greenLimit + 1
             saveSettings()
+            MonitorWidgetProvider.updateAll(this)
             showConfigScreen()
         })
 
         box.addView(limitRow("🟡 Amarelo até", yellowLimit, greenLimit + 1, 99) {
             yellowLimit = it
             saveSettings()
+            MonitorWidgetProvider.updateAll(this)
             showConfigScreen()
         })
 
         val red = TextView(this)
         red.text = "🔴 Vermelho acima de ${yellowLimit + 1}%"
         red.textSize = 17f
-        red.setTextColor(Color.rgb(14, 26, 56))
+        red.setTextColor(mainText())
         red.setPadding(0, dp(12), 0, dp(12))
         box.addView(red)
 
         val notificationButton = Button(this)
-        notificationButton.text = if (notificationEnabled) "DESATIVAR NOTIFICAÇÃO FIXA" else "ATIVAR NOTIFICAÇÃO FIXA"
+        notificationButton.text = if (notificationEnabled) "DESATIVAR MONITORAMENTO" else "ATIVAR MONITORAMENTO"
         notificationButton.setOnClickListener {
             notificationEnabled = !notificationEnabled
             saveSettings()
-            if (notificationEnabled) Monitor.showNotification(this, greenLimit, yellowLimit)
-            else NotificationManagerCompat.from(this).cancel(1001)
+            if (notificationEnabled) startMonitorService() else stopMonitorService()
             showConfigScreen()
         }
         box.addView(notificationButton, buttonParams())
-
         return box
+    }
+
+    private fun themeCard(): LinearLayout {
+        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
+        val h = TextView(this)
+        h.text = "Tema"
+        h.textSize = 20f
+        h.setTypeface(null, Typeface.BOLD)
+        h.setTextColor(mainText())
+        box.addView(h)
+
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.VERTICAL
+        row.setPadding(0, dp(12), 0, 0)
+
+        row.addView(themeButton("Automático pelo sistema", "auto"))
+        row.addView(themeButton("Claro", "light"))
+        row.addView(themeButton("Escuro", "dark"))
+        box.addView(row)
+        return box
+    }
+
+    private fun themeButton(label: String, value: String): Button {
+        return Button(this).apply {
+            text = if (themeMode == value) "✓ $label" else label
+            setOnClickListener {
+                themeMode = value
+                saveSettings()
+                MonitorWidgetProvider.updateAll(this@MainActivity)
+                showConfigScreen()
+            }
+        }
     }
 
     private fun limitRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit): LinearLayout {
@@ -353,7 +371,7 @@ class MainActivity : Activity() {
         title.text = "$label: $value%"
         title.textSize = 17f
         title.setTypeface(null, Typeface.BOLD)
-        title.setTextColor(Color.rgb(14, 26, 56))
+        title.setTextColor(mainText())
         container.addView(title)
 
         val row = LinearLayout(this)
@@ -362,91 +380,64 @@ class MainActivity : Activity() {
 
         val minus = Button(this)
         minus.text = "−"
-        minus.setOnClickListener {
-            if (value > min) onChange(value - 1)
-        }
+        minus.setOnClickListener { if (value > min) onChange(value - 1) }
 
         val number = TextView(this)
         number.text = "$value%"
         number.textSize = 20f
         number.setTypeface(null, Typeface.BOLD)
         number.gravity = Gravity.CENTER
-        number.setTextColor(Color.rgb(14, 26, 56))
+        number.setTextColor(mainText())
 
         val plus = Button(this)
         plus.text = "+"
-        plus.setOnClickListener {
-            if (value < max) onChange(value + 1)
-        }
+        plus.setOnClickListener { if (value < max) onChange(value + 1) }
 
         row.addView(minus, LinearLayout.LayoutParams(dp(70), LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(number, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(plus, LinearLayout.LayoutParams(dp(70), LinearLayout.LayoutParams.WRAP_CONTENT))
         container.addView(row)
-
         return container
     }
 
     private fun showWidgetScreen() {
         baseScreen()
+        root.addView(screenTitle("Widget"))
 
-        val title = screenTitle("Widget")
-        root.addView(title)
-
-        val preview = card(Color.WHITE, Color.rgb(210, 220, 240))
-
-        val top = TextView(this)
-        top.text = "Prévia do widget"
-        top.textSize = 20f
-        top.setTypeface(null, Typeface.BOLD)
-        top.setTextColor(Color.rgb(14, 26, 56))
-        preview.addView(top)
-
+        val preview = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(210, 220, 240))
         val data = Monitor.read(this)
 
+        val top = TextView(this)
+        top.text = "Widget compacto"
+        top.textSize = 20f
+        top.setTypeface(null, Typeface.BOLD)
+        top.setTextColor(mainText())
+        preview.addView(top)
+
         val line1 = TextView(this)
-        line1.text = "Armaz. ${data.storageUsedPercent}%"
-        line1.textSize = 18f
+        line1.text = "ARM ${data.storageUsedPercent}% • ${Monitor.statusLabel(data.storageUsedPercent, greenLimit, yellowLimit)}"
+        line1.textSize = 20f
         line1.setTypeface(null, Typeface.BOLD)
-        line1.setPadding(0, dp(20), 0, dp(6))
+        line1.setTextColor(Monitor.statusColor(data.storageUsedPercent, greenLimit, yellowLimit))
+        line1.setPadding(0, dp(18), 0, dp(6))
         preview.addView(line1)
 
-        val bar1 = progress()
-        bar1.progress = data.storageUsedPercent
-        bar1.progressTintList = ColorStateList.valueOf(Monitor.statusColor(data.storageUsedPercent, greenLimit, yellowLimit))
-        preview.addView(bar1)
-
         val line2 = TextView(this)
-        line2.text = "RAM ${data.memoryUsedPercent}%"
-        line2.textSize = 18f
+        line2.text = "RAM ${data.memoryUsedPercent}% • ${Monitor.statusLabel(data.memoryUsedPercent, greenLimit, yellowLimit)}"
+        line2.textSize = 20f
         line2.setTypeface(null, Typeface.BOLD)
-        line2.setPadding(0, dp(20), 0, dp(6))
+        line2.setTextColor(Monitor.statusColor(data.memoryUsedPercent, greenLimit, yellowLimit))
         preview.addView(line2)
-
-        val bar2 = progress()
-        bar2.progress = data.memoryUsedPercent
-        bar2.progressTintList = ColorStateList.valueOf(Monitor.statusColor(data.memoryUsedPercent, greenLimit, yellowLimit))
-        preview.addView(bar2)
 
         val free = TextView(this)
         free.text = "Livre: ${Monitor.format(data.storageFree)} no aparelho"
         free.textSize = 16f
-        free.setPadding(0, dp(18), 0, 0)
+        free.setTextColor(subText())
+        free.setPadding(0, dp(16), 0, 0)
         preview.addView(free)
 
         root.addView(preview)
-
-        val explanation = infoCard(
-            "Widget real disponível",
-            "Agora o widget já pode ser adicionado na tela inicial do Android.\n\n" +
-            "Como adicionar:\n" +
-            "1. Segure em uma área vazia da tela inicial.\n" +
-            "2. Toque em Widgets.\n" +
-            "3. Procure Monitor de Armazenamento e Memória.\n" +
-            "4. Arraste para a tela inicial.\n\n" +
-            "O widget mostra armazenamento, RAM, espaço livre e atualização."
-        )
-        root.addView(explanation)
+        root.addView(infoCard("Como usar", "Segure na tela inicial do Samsung, toque em Widgets, procure Monitor de Armazenamento e Memória e arraste para a tela.\n\nAo tocar no widget, abre um painel elegante com os detalhes."))
 
         val updateWidgetButton = Button(this)
         updateWidgetButton.text = "ATUALIZAR WIDGET AGORA"
@@ -464,19 +455,15 @@ class MainActivity : Activity() {
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
         nav.setPadding(dp(10), dp(10), dp(10), dp(10))
-        nav.background = rounded(Color.WHITE, Color.rgb(230, 235, 245), dp(22))
+        nav.background = rounded(if (isDark()) Color.rgb(25, 31, 48) else Color.WHITE, if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(230, 235, 245), dp(22))
 
         nav.addView(navItem("📊\nPainel", active == "Painel") { showPanelScreen() })
         nav.addView(navItem("▦\nWidget", active == "Widget") { showWidgetScreen() })
         nav.addView(navItem("⚙\nConfig.", active == "Config.") { showConfigScreen() })
 
-        val navParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
+        val navParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         navParams.setMargins(0, dp(8), 0, 0)
         nav.layoutParams = navParams
-
         return nav
     }
 
@@ -485,8 +472,8 @@ class MainActivity : Activity() {
             text = textValue
             textSize = 13f
             gravity = Gravity.CENTER
-            setTextColor(if (active) Color.rgb(20, 92, 210) else Color.rgb(80, 90, 110))
-            background = if (active) rounded(Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(16)) else null
+            setTextColor(if (active) Color.rgb(20, 92, 210) else subText())
+            background = if (active) rounded(if (isDark()) Color.rgb(35, 50, 80) else Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(16)) else null
             setPadding(dp(10), dp(8), dp(10), dp(8))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
@@ -499,25 +486,25 @@ class MainActivity : Activity() {
             textSize = 26f
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setTextColor(Color.rgb(14, 26, 56))
+            setTextColor(mainText())
             setPadding(0, 0, 0, dp(20))
         }
     }
 
     private fun infoCard(title: String, body: String): LinearLayout {
-        val box = card(Color.WHITE, Color.rgb(225, 230, 240))
+        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
         val t = TextView(this)
         t.text = title
         t.textSize = 20f
         t.setTypeface(null, Typeface.BOLD)
-        t.setTextColor(Color.rgb(14, 26, 56))
+        t.setTextColor(mainText())
         box.addView(t)
 
         val b = TextView(this)
         b.text = body
         b.textSize = 16f
         b.setPadding(0, dp(12), 0, 0)
-        b.setTextColor(Color.rgb(45, 55, 75))
+        b.setTextColor(subText())
         box.addView(b)
         return box
     }
@@ -531,11 +518,7 @@ class MainActivity : Activity() {
         iconView.text = icon
         iconView.textSize = 26f
         iconView.gravity = Gravity.CENTER
-        iconView.background = rounded(
-            if (warning) Color.rgb(255, 193, 7) else Color.rgb(58, 201, 78),
-            Color.TRANSPARENT,
-            dp(16)
-        )
+        iconView.background = rounded(if (warning) Color.rgb(255, 193, 7) else Color.rgb(58, 201, 78), Color.TRANSPARENT, dp(16))
 
         val iconParams = LinearLayout.LayoutParams(dp(64), dp(64))
         iconParams.setMargins(0, 0, dp(14), 0)
@@ -545,9 +528,8 @@ class MainActivity : Activity() {
         titleView.text = title
         titleView.textSize = 17f
         titleView.setTypeface(null, Typeface.BOLD)
-        titleView.setTextColor(Color.rgb(14, 26, 56))
+        titleView.setTextColor(mainText())
         row.addView(titleView)
-
         return row
     }
 
@@ -556,11 +538,8 @@ class MainActivity : Activity() {
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
         row.setPadding(0, dp(10), 0, dp(10))
-
-        val left = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        row.addView(percent, left)
+        row.addView(percent, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(status)
-
         return row
     }
 
@@ -568,11 +547,9 @@ class MainActivity : Activity() {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.setPadding(0, dp(16), 0, 0)
-
         row.addView(metricBox(a, av), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(metricBox(b, bv), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(metricBox(c, cv), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
         return row
     }
 
@@ -585,10 +562,9 @@ class MainActivity : Activity() {
         l.text = label
         l.textSize = 12f
         l.gravity = Gravity.CENTER
-        l.setTextColor(Color.rgb(80, 90, 110))
+        l.setTextColor(subText())
 
         value.gravity = Gravity.CENTER
-
         box.addView(l)
         box.addView(value)
         return box
@@ -599,11 +575,7 @@ class MainActivity : Activity() {
         v.orientation = LinearLayout.VERTICAL
         v.setPadding(dp(18), dp(18), dp(18), dp(18))
         v.background = rounded(bg, border, dp(22))
-
-        val params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
+        val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         params.setMargins(0, 0, 0, dp(16))
         v.layoutParams = params
         return v
@@ -612,7 +584,7 @@ class MainActivity : Activity() {
     private fun percentText() = TextView(this).apply {
         textSize = 34f
         setTypeface(null, Typeface.BOLD)
-        setTextColor(Color.rgb(14, 26, 56))
+        setTextColor(mainText())
     }
 
     private fun pillText() = TextView(this).apply {
@@ -623,7 +595,7 @@ class MainActivity : Activity() {
     private fun metricText() = TextView(this).apply {
         textSize = 17f
         setTypeface(null, Typeface.BOLD)
-        setTextColor(Color.rgb(14, 26, 56))
+        setTextColor(mainText())
     }
 
     private fun progress() = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -633,10 +605,7 @@ class MainActivity : Activity() {
     }
 
     private fun buttonParams(): LinearLayout.LayoutParams {
-        val p = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
+        val p = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         p.setMargins(0, dp(6), 0, dp(6))
         return p
     }
@@ -673,8 +642,8 @@ data class MonitorData(
 )
 
 object Monitor {
-    private const val CHANNEL_ID = "monitor_channel"
-    private const val NOTIFICATION_ID = 1001
+    const val CHANNEL_ID = "monitor_channel"
+    const val NOTIFICATION_ID = 1001
 
     fun read(context: Context): MonitorData {
         val stat = StatFs(Environment.getDataDirectory().path)
@@ -692,17 +661,7 @@ object Monitor {
         val memoryUsed = memoryTotal - memoryFree
         val memoryUsedPercent = if (memoryTotal > 0) ((memoryUsed * 100) / memoryTotal).toInt() else 0
 
-        return MonitorData(
-            storageTotal,
-            storageFree,
-            storageUsed,
-            storageUsedPercent,
-            memoryTotal,
-            memoryFree,
-            memoryUsed,
-            memoryUsedPercent,
-            System.currentTimeMillis()
-        )
+        return MonitorData(storageTotal, storageFree, storageUsed, storageUsedPercent, memoryTotal, memoryFree, memoryUsed, memoryUsedPercent, System.currentTimeMillis())
     }
 
     fun format(bytes: Long): String {
@@ -713,6 +672,10 @@ object Monitor {
 
     fun time(millis: Long): String {
         return SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("pt", "BR")).format(Date(millis))
+    }
+
+    fun shortTime(millis: Long): String {
+        return SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(Date(millis))
     }
 
     fun statusColor(percent: Int, greenLimit: Int, yellowLimit: Int): Int {
@@ -749,51 +712,52 @@ object Monitor {
 
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Monitor de armazenamento e memória",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val channel = NotificationChannel(CHANNEL_ID, "Monitor de armazenamento e memória", NotificationManager.IMPORTANCE_LOW)
             channel.description = "Mostra armazenamento e memória RAM"
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
     }
 
-    fun showNotification(context: Context, greenLimit: Int = 89, yellowLimit: Int = 96) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        }
-
+    fun buildNotification(context: Context, greenLimit: Int = 89, yellowLimit: Int = 96): android.app.Notification {
         val data = read(context)
         val storageStatus = statusLabel(data.storageUsedPercent, greenLimit, yellowLimit)
         val memoryStatus = statusLabel(data.memoryUsedPercent, greenLimit, yellowLimit)
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val openIntent = Intent(context, MainActivity::class.java)
+        val openPendingIntent = PendingIntent.getActivity(context, 1002, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setContentTitle("Armaz. ${data.storageUsedPercent}% $storageStatus • RAM ${data.memoryUsedPercent}% $memoryStatus")
-            .setContentText("Usado: ${format(data.storageUsed)} de ${format(data.storageTotal)} • RAM: ${format(data.memoryUsed)} de ${format(data.memoryTotal)}")
+            .setContentText("Livre: ${format(data.storageFree)} • Atualizado ${shortTime(data.readAt)}")
+            .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+    }
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    fun showNotification(context: Context, greenLimit: Int = 89, yellowLimit: Int = 96) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        }
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, buildNotification(context, greenLimit, yellowLimit))
     }
 
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<MonitorWorker>(15, TimeUnit.MINUTES).build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "monitor_periodic_work",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request
-        )
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("monitor_periodic_work", ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 }
 
 class MonitorWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        Monitor.showNotification(applicationContext)
+        val prefs = applicationContext.getSharedPreferences("monitor_config", Context.MODE_PRIVATE)
+        val green = prefs.getInt("greenLimit", 89)
+        val yellow = prefs.getInt("yellowLimit", 96)
+        val enabled = prefs.getBoolean("notificationEnabled", true)
+        if (enabled) Monitor.showNotification(applicationContext, green, yellow)
         MonitorWidgetProvider.updateAll(applicationContext)
         return Result.success()
     }
