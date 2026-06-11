@@ -201,7 +201,6 @@ class CleanupActivity : Activity() {
         val analyze = Button(this)
         analyze.text = "Analisar memória"
         analyze.setOnClickListener {
-            Monitor.showNotification(this)
             MonitorWidgetProvider.updateAll(this)
             Toast.makeText(this, "Memória analisada", Toast.LENGTH_SHORT).show()
             showHome()
