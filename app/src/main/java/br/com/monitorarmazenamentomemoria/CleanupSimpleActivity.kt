@@ -767,7 +767,7 @@ class CleanupSimpleActivity : Activity() {
         thread {
             val result = mutableListOf<FileItem>()
             val started = System.currentTimeMillis()
-            val maxFiles = 8000
+            val maxFiles = 30000
 
             fun scan(dir: File, depth: Int) {
                 if (result.size >= maxFiles) return
@@ -816,13 +816,21 @@ class CleanupSimpleActivity : Activity() {
     private fun importantRoots(): List<File> {
         val base = Environment.getExternalStorageDirectory()
         return listOf(
+            File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents"),
+            File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Sent"),
+            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents"),
+            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents/Sent"),
+            File(base, "WhatsApp/Media/WhatsApp Documents"),
+            File(base, "WhatsApp/Media/WhatsApp Documents/Sent"),
             File(base, "Download"),
             File(base, "Downloads"),
+            File(base, "Documents"),
             File(base, "DCIM"),
             File(base, "Movies"),
             File(base, "Pictures"),
             File(base, "WhatsApp"),
             File(base, "Android/media/com.whatsapp"),
+            File(base, "Android/media/com.whatsapp.w4b"),
             File(base, "Android/media"),
             base
         ).distinctBy { it.absolutePath }
@@ -849,6 +857,10 @@ class CleanupSimpleActivity : Activity() {
     private fun isAudioName(name: String): Boolean {
         val n = name.lowercase(Locale.ROOT)
         return n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac") || n.endsWith(".wav") || n.endsWith(".ogg")
+    }
+
+    private fun isPdfName(name: String): Boolean {
+        return name.lowercase(Locale.ROOT).endsWith(".pdf")
     }
 
     private fun isDocumentName(name: String): Boolean {
@@ -892,7 +904,14 @@ class CleanupSimpleActivity : Activity() {
             "APKs" -> allFiles.filter { it.category == "APKs" }
             "Fotos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isImageName(it.name) }
             "Vídeos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isVideoName(it.name) }
-            "Documentos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isDocumentName(it.name) }
+            "Documentos do WhatsApp" -> allFiles.filter {
+                isWhatsAppPath(it.path) && (
+                    isPdfName(it.name) ||
+                    isDocumentName(it.name) ||
+                    normalizedPath(it.path).contains("whatsapp documents") ||
+                    normalizedPath(it.path).contains("whatsapp business documents")
+                )
+            }
             "Áudios do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isAudioName(it.name) }
             "Backups do WhatsApp" -> allFiles.filter { isWhatsAppBackup(it) }
             "Todos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
@@ -927,6 +946,7 @@ class CleanupSimpleActivity : Activity() {
 
         return when {
             p.contains("whatsapp") && n.contains("msgstore") -> "Backup criptografado do WhatsApp"
+            p.contains("whatsapp") && n.endsWith(".pdf") -> "PDF do WhatsApp"
             p.contains("whatsapp") && n.endsWith(".opus") -> "Áudio do WhatsApp"
             p.contains("whatsapp") && n.endsWith(".mp4") -> "Vídeo do WhatsApp"
             p.contains("whatsapp") -> "Arquivo do WhatsApp"
