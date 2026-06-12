@@ -1063,7 +1063,7 @@ class MainActivity : Activity() {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
-        nav.setPadding(dp(10), dp(10), dp(10), dp(10))
+        nav.setPadding(dp(8), dp(8), dp(8), dp(28))
         nav.background = rounded(if (isDark()) Color.rgb(25, 31, 48) else Color.WHITE, if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(230, 235, 245), dp(22))
 
         nav.addView(navItem("📊\nPainel", active == "Painel") { showPanelScreen() })
@@ -1080,11 +1080,11 @@ class MainActivity : Activity() {
     private fun navItem(textValue: String, active: Boolean, action: () -> Unit): TextView {
         return TextView(this).apply {
             text = textValue
-            textSize = 13f
+            textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(if (active) Color.rgb(20, 92, 210) else subText())
             background = if (active) rounded(if (isDark()) Color.rgb(35, 50, 80) else Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(16)) else null
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(6), dp(6), dp(6), dp(8))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
         }

@@ -7,6 +7,9 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.Manifest
 import android.content.Intent
+import android.provider.MediaStore
+import android.content.ContentUris
+import android.content.ClipData
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -406,22 +409,54 @@ class CleanupSimpleActivity : Activity() {
             return
         }
 
-        val selectedItems = allFiles.filter { selectedFiles.contains(it.path) }
+        val items = allFiles.filter { selectedFiles.contains(it.path) }
+        val existingFiles = items.map { File(it.path) }.filter { it.exists() && it.isFile }
 
-        val text = buildString {
-            append("Arquivos selecionados:\n\n")
-            selectedItems.forEach {
-                append("• ${it.name}\n")
-                append("${it.path}\n\n")
+        if (existingFiles.isEmpty()) {
+            Toast.makeText(this, "Nenhum arquivo válido para compartilhar", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            if (existingFiles.size == 1) {
+                val file = existingFiles.first()
+                val uri = fileUriFor(file)
+
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType(file.name)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    clipData = ClipData.newUri(contentResolver, file.name, uri)
+                }
+
+                startActivity(Intent.createChooser(intent, "Compartilhar arquivo"))
+            } else {
+                val uris = ArrayList<Uri>()
+                existingFiles.forEach { uris.add(fileUriFor(it)) }
+
+                val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "*/*"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                    if (uris.isNotEmpty()) {
+                        val first = ClipData.newUri(contentResolver, "arquivo", uris.first())
+                        for (i in 1 until uris.size) {
+                            first.addItem(ClipData.Item(uris[i]))
+                        }
+                        clipData = first
+                    }
+                }
+
+                startActivity(Intent.createChooser(intent, "Compartilhar arquivos"))
             }
+        } catch (_: Exception) {
+            AlertDialog.Builder(this)
+                .setTitle("Não foi possível compartilhar")
+                .setMessage("O Android bloqueou o compartilhamento ou não encontrou um app compatível.")
+                .setPositiveButton("OK", null)
+                .show()
         }
-
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
-        }
-
-        startActivity(Intent.createChooser(intent, "Compartilhar lista de arquivos"))
     }
 
     private fun confirmDeleteSelectedFiles() {
@@ -612,24 +647,47 @@ class CleanupSimpleActivity : Activity() {
                     .invoke(null)
             } catch (_: Exception) {}
 
-            val uri = Uri.fromFile(file)
+            val uri = fileUriFor(file)
             val mime = mimeType(file.name)
 
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(uri, mime)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = ClipData.newUri(contentResolver, file.name, uri)
+            }
 
-            startActivity(Intent.createChooser(intent, "Abrir arquivo com"))
+            startActivity(intent)
         } catch (_: Exception) {
             AlertDialog.Builder(this)
                 .setTitle("Não foi possível abrir")
                 .setMessage(
-                    "O Android não encontrou um aplicativo compatível para abrir este arquivo, ou bloqueou o acesso direto.\\n\\n" +
-                    "Arquivo:\\n${item.path}"
+                    "O Android não encontrou um aplicativo padrão para abrir este arquivo.\n\n" +
+                    "Escolha um app e marque Sempre quando o Android perguntar.\n\n" +
+                    "Arquivo:\n${item.path}"
                 )
                 .setPositiveButton("OK", null)
                 .show()
+        }
+    }
+
+    private fun fileUriFor(file: File): Uri {
+        return try {
+            val collection = MediaStore.Files.getContentUri("external")
+            val projection = arrayOf(MediaStore.MediaColumns._ID)
+            val selection = "${MediaStore.MediaColumns.DATA}=?"
+            val args = arrayOf(file.absolutePath)
+
+            contentResolver.query(collection, projection, selection, args, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val id = cursor.getLong(0)
+                    return ContentUris.withAppendedId(collection, id)
+                }
+            }
+
+            Uri.fromFile(file)
+        } catch (_: Exception) {
+            Uri.fromFile(file)
         }
     }
 
@@ -827,7 +885,7 @@ class CleanupSimpleActivity : Activity() {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
-        nav.setPadding(dp(10), dp(8), dp(10), dp(8))
+        nav.setPadding(dp(8), dp(6), dp(8), dp(28))
         nav.setBackgroundColor(Color.WHITE)
 
         nav.addView(navItem("📊\nPainel", false) {
@@ -855,7 +913,7 @@ class CleanupSimpleActivity : Activity() {
     private fun navItem(textValue: String, active: Boolean, action: () -> Unit): TextView {
         return TextView(this).apply {
             text = textValue
-            textSize = 12f
+            textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(if (active) Color.rgb(20, 92, 210) else Color.rgb(80, 90, 110))
             setPadding(dp(6), dp(5), dp(6), dp(5))
