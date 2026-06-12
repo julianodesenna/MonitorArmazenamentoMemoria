@@ -295,6 +295,13 @@ class CleanupSimpleActivity : Activity() {
         }
         selectionBox.addView(shareSelected)
 
+        val deleteSelected = Button(this)
+        deleteSelected.text = "Excluir selecionados"
+        deleteSelected.setOnClickListener {
+            confirmDeleteSelectedFiles()
+        }
+        selectionBox.addView(deleteSelected)
+
         root.addView(selectionBox)
         updateSelectedInfo()
 
