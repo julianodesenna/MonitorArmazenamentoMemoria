@@ -232,12 +232,14 @@ class MainActivity : Activity() {
         root.addView(alertText, alertParams)
 
         val refresh = Button(this)
-        refresh.text = "ATUALIZAR AGORA"\n        styleButton(refresh, true)
+        refresh.text = "ATUALIZAR AGORA"
+        styleButton(refresh, true)
         refresh.setOnClickListener { updateInfo() }
         root.addView(refresh, buttonParams())
 
         val notify = Button(this)
-        notify.text = if (notificationEnabled) "MONITORAMENTO ATIVO" else "ATIVAR MONITORAMENTO"\n        styleButton(notify, false)
+        notify.text = if (notificationEnabled) "MONITORAMENTO ATIVO" else "ATIVAR MONITORAMENTO"
+        styleButton(notify, false)
         notify.setOnClickListener {
             notificationEnabled = !notificationEnabled
             saveSettings()
@@ -304,7 +306,8 @@ class MainActivity : Activity() {
         root.addView(infoCard("Atualização", "Tela aberta: a cada 30 segundos\nServiço ativo: atualiza notificação e widget em segundo plano\nWidget: toque nele para abrir o painel elegante"))
 
         val reset = Button(this)
-        reset.text = "RESTAURAR PADRÃO"\n        styleButton(reset, false)
+        reset.text = "RESTAURAR PADRÃO"
+        styleButton(reset, false)
         reset.setOnClickListener {
             greenLimit = 89
             yellowLimit = 96

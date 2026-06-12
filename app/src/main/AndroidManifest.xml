@@ -17,7 +17,9 @@
     <application
         android:name=".MonitorApp"
         android:allowBackup="true"
-        android:label="Monitor de Armazenamento e Memória"\n        android:icon="@drawable/ic_launcher_eye"\n        android:roundIcon="@drawable/ic_launcher_eye"
+        android:label="Monitor de Armazenamento e Memória"
+        android:icon="@drawable/ic_launcher_eye"
+        android:roundIcon="@drawable/ic_launcher_eye"
         android:theme="@style/AppThemeMonitor"
         android:supportsRtl="true">
 
