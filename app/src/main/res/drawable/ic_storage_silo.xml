@@ -1,60 +1,32 @@
-<?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="315"
-                android:startColor="#FFF4D0"
-                android:endColor="#FFE2A1"/>
-            <corners android:radius="18dp"/>
-            <stroke
-                android:width="1dp"
-                android:color="#F0B94D"/>
-        </shape>
-    </item>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
 
-    <item android:left="10dp" android:top="8dp" android:right="40dp" android:bottom="10dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="0"
-                android:startColor="#9AABB8"
-                android:centerColor="#DDE5EA"
-                android:endColor="#7E919E"/>
-            <corners android:radius="10dp"/>
-            <stroke android:width="1dp" android:color="#6B7C88"/>
-        </shape>
-    </item>
+    <path
+        android:fillColor="#FFB347"
+        android:pathData="M18,18 C18,12 23,7 29,7 C35,7 40,12 40,18 L40,55 L18,55 Z" />
 
-    <item android:left="38dp" android:top="8dp" android:right="10dp" android:bottom="10dp">
-        <shape android:shape="rectangle">
-            <gradient
-                android:angle="0"
-                android:startColor="#8F9FAA"
-                android:centerColor="#D9E2E8"
-                android:endColor="#728592"/>
-            <corners android:radius="10dp"/>
-            <stroke android:width="1dp" android:color="#6B7C88"/>
-        </shape>
-    </item>
+    <path
+        android:fillColor="#C98A2E"
+        android:pathData="M15,55 L43,55 L43,60 L15,60 Z" />
 
-    <item android:left="10dp" android:top="12dp" android:right="40dp">
-        <shape android:shape="rectangle">
-            <size android:height="6dp"/>
-            <solid android:color="#5A6D78"/>
-        </shape>
-    </item>
+    <path
+        android:fillColor="#FFF1D0"
+        android:pathData="M20,19 L38,19 L38,24 L20,24 Z M20,31 L38,31 L38,35 L20,35 Z M20,43 L38,43 L38,47 L20,47 Z" />
 
-    <item android:left="38dp" android:top="12dp" android:right="10dp">
-        <shape android:shape="rectangle">
-            <size android:height="6dp"/>
-            <solid android:color="#5A6D78"/>
-        </shape>
-    </item>
+    <path
+        android:fillColor="#00E5B8"
+        android:pathData="M43,25 C43,21 46,17 50,17 C54,17 57,21 57,25 L57,55 L43,55 Z" />
 
-    <item android:left="18dp" android:top="36dp" android:right="18dp" android:bottom="14dp">
-        <shape android:shape="rectangle">
-            <solid android:color="#D39B3D"/>
-            <corners android:radius="4dp"/>
-        </shape>
-    </item>
-</layer-list>
+    <path
+        android:fillColor="#0B1020"
+        android:fillAlpha="0.18"
+        android:pathData="M47,27 L55,27 L55,31 L47,31 Z M47,38 L55,38 L55,42 L47,42 Z" />
+
+    <path
+        android:fillColor="#8A5A18"
+        android:pathData="M12,60 L60,60 L60,63 L12,63 Z" />
+
+</vector>
