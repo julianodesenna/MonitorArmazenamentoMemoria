@@ -85,6 +85,14 @@ class MainActivity : Activity() {
         showPanelScreen()
     }
 
+    override fun onBackPressed() {
+        if (activeScreen != "Painel") {
+            showPanelScreen()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         handler.post(autoRefresh)

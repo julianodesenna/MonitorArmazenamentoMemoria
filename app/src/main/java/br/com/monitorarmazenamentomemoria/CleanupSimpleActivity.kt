@@ -45,6 +45,16 @@ class CleanupSimpleActivity : Activity() {
         drawHome()
     }
 
+    override fun onBackPressed() {
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        )
+        finish()
+    }
+
     private fun buildScreen() {
         val main = LinearLayout(this)
         main.orientation = LinearLayout.VERTICAL
@@ -53,7 +63,7 @@ class CleanupSimpleActivity : Activity() {
         val contentScroll = ScrollView(this)
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setPadding(dp(18), dp(18), dp(18), dp(12))
+        root.setPadding(dp(18), dp(18), dp(18), dp(96))
         contentScroll.addView(root)
 
         main.addView(contentScroll, LinearLayout.LayoutParams(
@@ -916,7 +926,7 @@ class CleanupSimpleActivity : Activity() {
             textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(if (active) Color.rgb(20, 92, 210) else Color.rgb(80, 90, 110))
-            setPadding(dp(6), dp(5), dp(6), dp(5))
+            setPadding(dp(4), dp(4), dp(4), dp(6))
             if (active) background = rounded(Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(14))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
