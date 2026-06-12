@@ -19,6 +19,7 @@ import android.os.StrictMode
 import android.os.Environment
 import android.provider.Settings
 import android.view.Gravity
+import android.view.WindowInsets
 import android.widget.*
 import java.io.File
 import java.text.SimpleDateFormat
@@ -40,6 +41,10 @@ class CleanupSimpleActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(true)
+        }
+        window.navigationBarColor = Color.WHITE
         buildScreen()
         scanFiles()
         drawHome()

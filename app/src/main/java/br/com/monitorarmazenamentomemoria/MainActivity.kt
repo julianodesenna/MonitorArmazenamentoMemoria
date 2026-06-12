@@ -18,6 +18,7 @@ import android.view.View
 import android.provider.Settings
 import android.net.Uri
 import android.view.Gravity
+import android.view.WindowInsets
 import android.widget.*
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -75,6 +76,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(true)
+        }
+        window.navigationBarColor = Color.WHITE
         prefs = getSharedPreferences("monitor_config", Context.MODE_PRIVATE)
         loadSettings()
 
