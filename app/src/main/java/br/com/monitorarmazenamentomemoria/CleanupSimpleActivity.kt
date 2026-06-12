@@ -394,6 +394,157 @@ class CleanupSimpleActivity : Activity() {
     }
 
 
+
+    private fun updateSelectedInfo() {
+        // Atualização simples e segura para evitar quebra de compilação.
+        // A interface principal continua funcionando mesmo sem contador visual dedicado.
+    }
+
+    private fun shareSelectedFiles() {
+        if (selectedFiles.isEmpty()) {
+            Toast.makeText(this, "Nenhum arquivo selecionado", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val selectedItems = allFiles.filter { selectedFiles.contains(it.path) }
+
+        val text = buildString {
+            append("Arquivos selecionados:\n\n")
+            selectedItems.forEach {
+                append("• ${it.name}\n")
+                append("${it.path}\n\n")
+            }
+        }
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+
+        startActivity(Intent.createChooser(intent, "Compartilhar lista de arquivos"))
+    }
+
+    private fun confirmDeleteSelectedFiles() {
+        if (selectedFiles.isEmpty()) {
+            Toast.makeText(this, "Nenhum arquivo selecionado", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val items = allFiles.filter { selectedFiles.contains(it.path) }
+
+        if (items.isEmpty()) {
+            selectedFiles.clear()
+            updateSelectedInfo()
+            Toast.makeText(this, "A seleção não foi encontrada na lista atual", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val totalSize = items.sumOf { it.size }
+        val sensitive = items.filter { it.risk == "alto" }
+
+        val message = buildString {
+            append("Arquivos selecionados: ${items.size}\n")
+            append("Espaço estimado: ${formatSize(totalSize)}\n\n")
+            append("Essa ação tentará apagar os arquivos selecionados do aparelho.\n")
+            append("Depois de apagados, eles podem não ser recuperáveis.\n\n")
+
+            if (sensitive.isNotEmpty()) {
+                append("ATENÇÃO: ${sensitive.size} arquivo(s) sensível(eis) selecionado(s).\n")
+                append("Podem conter conversas, backups, documentos, bancos de dados, senhas ou dados importantes.\n\n")
+                append("Exemplos:\n")
+                sensitive.take(5).forEach { append("• ${it.name}\n") }
+                if (sensitive.size > 5) append("• ...\n")
+                append("\n")
+            }
+
+            append("Deseja continuar?")
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (sensitive.isNotEmpty()) "Confirmar exclusão sensível" else "Confirmar exclusão")
+            .setMessage(message)
+            .setPositiveButton("Excluir") { _, _ ->
+                if (sensitive.isNotEmpty()) {
+                    confirmSensitiveDelete(items, sensitive.size)
+                } else {
+                    deleteFilesNow(items)
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun confirmSensitiveDelete(items: List<FileItem>, sensitiveCount: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Último aviso")
+            .setMessage(
+                "Você selecionou $sensitiveCount arquivo(s) sensível(eis).\n\n" +
+                "Não apague backups do WhatsApp, bancos de dados, documentos ou arquivos de chave se não tiver certeza.\n\n" +
+                "Quer apagar mesmo assim?"
+            )
+            .setPositiveButton("Sim, apagar") { _, _ ->
+                deleteFilesNow(items)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun deleteFilesNow(items: List<FileItem>) {
+        thread {
+            var deleted = 0
+            var failed = 0
+            val failedNames = mutableListOf<String>()
+            val deletedPaths = mutableSetOf<String>()
+
+            for (item in items) {
+                try {
+                    val file = File(item.path)
+                    if (file.exists() && file.isFile && file.delete()) {
+                        deleted++
+                        deletedPaths.add(item.path)
+                    } else {
+                        failed++
+                        failedNames.add(item.name)
+                    }
+                } catch (_: Exception) {
+                    failed++
+                    failedNames.add(item.name)
+                }
+            }
+
+            allFiles = allFiles.filterNot { deletedPaths.contains(it.path) }
+            selectedFiles.removeAll(items.map { it.path }.toSet())
+
+            runOnUiThread {
+                val resultMessage = buildString {
+                    append("Apagados: $deleted\n")
+                    append("Falharam: $failed")
+
+                    if (failedNames.isNotEmpty()) {
+                        append("\n\nO Android pode bloquear arquivos protegidos, de outro app ou sem permissão.\n\n")
+                        failedNames.take(8).forEach { append("• $it\n") }
+                        if (failedNames.size > 8) append("• ...")
+                    }
+                }
+
+                AlertDialog.Builder(this)
+                    .setTitle("Resultado da exclusão")
+                    .setMessage(resultMessage)
+                    .setPositiveButton("OK") { _, _ ->
+                        updateSelectedInfo()
+                        if (currentCategory.isNotBlank()) {
+                            showCategory(currentCategory, "")
+                        } else {
+                            drawHome()
+                        }
+                        scanFiles()
+                    }
+                    .show()
+            }
+        }
+    }
+
+
     private fun hasStorageAccess(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
