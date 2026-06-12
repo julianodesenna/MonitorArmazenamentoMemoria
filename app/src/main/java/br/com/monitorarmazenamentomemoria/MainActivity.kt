@@ -44,11 +44,13 @@ class MainActivity : Activity() {
     private var notificationEnabled = true
     private var themeMode = "auto"
     private var activeScreen = "Painel"
+    private val screenBackStack = mutableListOf<String>()
     private var cleanupMinSizeMb = 10
     private var cleanupOrder = "size"
 
     private lateinit var root: LinearLayout
     private lateinit var scroll: ScrollView
+    private lateinit var mainShell: LinearLayout
 
     private lateinit var storagePercent: TextView
     private lateinit var storageStatus: TextView
@@ -97,8 +99,9 @@ class MainActivity : Activity() {
     }
 
     override fun onBackPressed() {
-        if (activeScreen != "Painel") {
-            showPanelScreen()
+        if (screenBackStack.isNotEmpty()) {
+            val previous = screenBackStack.removeAt(screenBackStack.lastIndex)
+            showScreenDirect(previous)
         } else {
             super.onBackPressed()
         }
@@ -163,16 +166,29 @@ class MainActivity : Activity() {
     private fun subText() = if (isDark()) Color.rgb(176, 188, 214) else Color.rgb(78, 88, 108)
 
     private fun baseScreen() {
+        mainShell = LinearLayout(this)
+        mainShell.orientation = LinearLayout.VERTICAL
+        mainShell.setBackgroundColor(bgColor())
+
         scroll = ScrollView(this)
         scroll.setBackgroundColor(bgColor())
 
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setPadding(dp(18), dp(28), dp(18), dp(28))
+        root.setPadding(dp(18), dp(28), dp(18), dp(18))
         root.gravity = Gravity.CENTER_HORIZONTAL
 
         scroll.addView(root)
-        setContentView(scroll)
+        mainShell.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        setContentView(mainShell)
     }
 
     private fun showPanelScreen() {
@@ -256,7 +272,7 @@ class MainActivity : Activity() {
         }
         root.addView(notify, buttonParams())
 
-        root.addView(bottomNav("Painel"))
+        addFixedBottomNav("Painel")
         updateInfo()
     }
 
@@ -320,7 +336,7 @@ class MainActivity : Activity() {
         }
         root.addView(reset, buttonParams())
 
-        root.addView(bottomNav("Config."))
+        addFixedBottomNav("Config.")
     }
 
     private fun configCard(): LinearLayout {
@@ -485,7 +501,7 @@ class MainActivity : Activity() {
         }
         root.addView(updateWidgetButton, buttonParams())
 
-        root.addView(bottomNav("Widget"))
+        addFixedBottomNav("Widget")
     }
 
 
@@ -692,7 +708,7 @@ class MainActivity : Activity() {
 
         root.addView(infoCard("Atualização automática", "Enquanto esta aba Limpeza estiver aberta, a análise será atualizada a cada 1 minuto.\n\nAgora os arquivos ficam agrupados por categoria. A exclusão ainda não foi ativada por segurança."))
 
-        root.addView(bottomNav("Limpeza"))
+        addFixedBottomNav("Limpeza")
     }
 
     private fun hasAllFilesAccess(): Boolean {
@@ -1081,6 +1097,38 @@ class MainActivity : Activity() {
         }
     }
 
+
+    private fun addFixedBottomNav(active: String) {
+        mainShell.addView(bottomNav(active))
+        mainShell.addView(safeBottomSpaceForSamsung())
+    }
+
+    private fun safeBottomSpaceForSamsung(): View {
+        return View(this).apply {
+            setBackgroundColor(if (isDark()) bgColor() else Color.WHITE)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(64)
+            )
+        }
+    }
+
+    private fun navigateToScreen(screen: String) {
+        if (screen == activeScreen) return
+        screenBackStack.add(activeScreen)
+        showScreenDirect(screen)
+    }
+
+    private fun showScreenDirect(screen: String) {
+        when (screen) {
+            "Painel" -> showPanelScreen()
+            "Widget" -> showWidgetScreen()
+            "Config." -> showConfigScreen()
+            "Limpeza" -> startActivity(Intent(this, CleanupSimpleActivity::class.java))
+            else -> showPanelScreen()
+        }
+    }
+
     private fun bottomNav(active: String): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
@@ -1088,10 +1136,10 @@ class MainActivity : Activity() {
         nav.setPadding(dp(8), dp(8), dp(8), dp(28))
         nav.background = rounded(if (isDark()) Color.rgb(18, 24, 42) else Color.WHITE, if (isDark()) Color.rgb(86, 72, 160) else Color.rgb(222, 228, 242), dp(24))
 
-        nav.addView(navItem("◉\nPainel", active == "Painel") { showPanelScreen() })
-        nav.addView(navItem("▦\nWidget", active == "Widget") { showWidgetScreen() })
-        nav.addView(navItem("✦\nLimpeza", active == "Limpeza") { startActivity(Intent(this, CleanupSimpleActivity::class.java)) })
-        nav.addView(navItem("⚙\nConfig.", active == "Config.") { showConfigScreen() })
+        nav.addView(navItem("📊\nPainel", active == "Painel") { navigateToScreen("Painel") })
+        nav.addView(navItem("▦\nWidget", active == "Widget") { navigateToScreen("Widget") })
+        nav.addView(navItem("🧹\nLimpeza", active == "Limpeza") { startActivity(Intent(this, CleanupSimpleActivity::class.java)) })
+        nav.addView(navItem("⚙\nConfig.", active == "Config.") { navigateToScreen("Config.") })
 
         val navParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         navParams.setMargins(0, dp(8), 0, 0)
