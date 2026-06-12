@@ -157,10 +157,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun bgColor() = if (isDark()) Color.rgb(12, 16, 28) else Color.rgb(246, 248, 252)
-    private fun cardColor() = if (isDark()) Color.rgb(25, 31, 48) else Color.WHITE
+    private fun bgColor() = if (isDark()) Color.rgb(8, 12, 24) else Color.rgb(248, 250, 253)
+    private fun cardColor() = if (isDark()) Color.rgb(18, 24, 42) else Color.WHITE
     private fun mainText() = if (isDark()) Color.WHITE else Color.rgb(14, 26, 56)
-    private fun subText() = if (isDark()) Color.rgb(190, 200, 220) else Color.rgb(80, 90, 110)
+    private fun subText() = if (isDark()) Color.rgb(176, 188, 214) else Color.rgb(78, 88, 108)
 
     private fun baseScreen() {
         scroll = ScrollView(this)
@@ -168,7 +168,7 @@ class MainActivity : Activity() {
 
         root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
-        root.setPadding(dp(18), dp(28), dp(18), dp(18))
+        root.setPadding(dp(18), dp(28), dp(18), dp(28))
         root.gravity = Gravity.CENTER_HORIZONTAL
 
         scroll.addView(root)
@@ -181,7 +181,7 @@ class MainActivity : Activity() {
 
         val title = TextView(this)
         title.text = "Monitor de\nArmazenamento e Memória"
-        title.textSize = 24f
+        title.textSize = 25f
         title.setTypeface(null, Typeface.BOLD)
         title.gravity = Gravity.CENTER
         title.setTextColor(mainText())
@@ -194,8 +194,8 @@ class MainActivity : Activity() {
         timeText.setPadding(0, dp(8), 0, dp(18))
         root.addView(timeText)
 
-        val storageCard = card(if (isDark()) Color.rgb(39, 33, 18) else Color.rgb(255, 252, 240), Color.rgb(255, 193, 7))
-        storageCard.addView(cardHeader("💾", "ARMAZENAMENTO", true))
+        val storageCard = card(if (isDark()) Color.rgb(35, 25, 12) else Color.rgb(255, 250, 238), Color.rgb(255, 179, 71))
+        storageCard.addView(cardHeaderDrawable(R.drawable.ic_storage_silo, "ARMAZENAMENTO", true))
         storagePercent = percentText()
         storageStatus = pillText()
         storageBar = progress()
@@ -208,8 +208,8 @@ class MainActivity : Activity() {
         storageCard.addView(metricsRow("Capacidade total", storageTotal, "Usado", storageUsed, "Livre", storageFree))
         root.addView(storageCard)
 
-        val memoryCard = card(if (isDark()) Color.rgb(18, 38, 24) else Color.rgb(244, 255, 246), Color.rgb(58, 201, 78))
-        memoryCard.addView(cardHeader("🧠", "MEMÓRIA RAM", false))
+        val memoryCard = card(if (isDark()) Color.rgb(11, 37, 34) else Color.rgb(240, 255, 250), Color.rgb(0, 229, 184))
+        memoryCard.addView(cardHeaderDrawable(R.drawable.ic_memory_ram, "MEMÓRIA RAM", false))
         memoryPercent = percentText()
         memoryStatus = pillText()
         memoryBar = progress()
@@ -232,12 +232,12 @@ class MainActivity : Activity() {
         root.addView(alertText, alertParams)
 
         val refresh = Button(this)
-        refresh.text = "ATUALIZAR AGORA"
+        refresh.text = "ATUALIZAR AGORA"\n        styleButton(refresh, true)
         refresh.setOnClickListener { updateInfo() }
         root.addView(refresh, buttonParams())
 
         val notify = Button(this)
-        notify.text = if (notificationEnabled) "MONITORAMENTO ATIVO" else "ATIVAR MONITORAMENTO"
+        notify.text = if (notificationEnabled) "MONITORAMENTO ATIVO" else "ATIVAR MONITORAMENTO"\n        styleButton(notify, false)
         notify.setOnClickListener {
             notificationEnabled = !notificationEnabled
             saveSettings()
@@ -304,7 +304,7 @@ class MainActivity : Activity() {
         root.addView(infoCard("Atualização", "Tela aberta: a cada 30 segundos\nServiço ativo: atualiza notificação e widget em segundo plano\nWidget: toque nele para abrir o painel elegante"))
 
         val reset = Button(this)
-        reset.text = "RESTAURAR PADRÃO"
+        reset.text = "RESTAURAR PADRÃO"\n        styleButton(reset, false)
         reset.setOnClickListener {
             greenLimit = 89
             yellowLimit = 96
@@ -1083,11 +1083,11 @@ class MainActivity : Activity() {
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
         nav.setPadding(dp(8), dp(8), dp(8), dp(28))
-        nav.background = rounded(if (isDark()) Color.rgb(25, 31, 48) else Color.WHITE, if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(230, 235, 245), dp(22))
+        nav.background = rounded(if (isDark()) Color.rgb(18, 24, 42) else Color.WHITE, if (isDark()) Color.rgb(86, 72, 160) else Color.rgb(222, 228, 242), dp(24))
 
-        nav.addView(navItem("📊\nPainel", active == "Painel") { showPanelScreen() })
+        nav.addView(navItem("◉\nPainel", active == "Painel") { showPanelScreen() })
         nav.addView(navItem("▦\nWidget", active == "Widget") { showWidgetScreen() })
-        nav.addView(navItem("🧹\nLimpeza", active == "Limpeza") { startActivity(Intent(this, CleanupSimpleActivity::class.java)) })
+        nav.addView(navItem("✦\nLimpeza", active == "Limpeza") { startActivity(Intent(this, CleanupSimpleActivity::class.java)) })
         nav.addView(navItem("⚙\nConfig.", active == "Config.") { showConfigScreen() })
 
         val navParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -1101,8 +1101,8 @@ class MainActivity : Activity() {
             text = textValue
             textSize = 11f
             gravity = Gravity.CENTER
-            setTextColor(if (active) Color.rgb(20, 92, 210) else subText())
-            background = if (active) rounded(if (isDark()) Color.rgb(35, 50, 80) else Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(16)) else null
+            setTextColor(if (active) Color.rgb(0, 229, 184) else subText())
+            background = if (active) rounded(if (isDark()) Color.rgb(35, 40, 78) else Color.rgb(232, 245, 255), Color.TRANSPARENT, dp(16)) else null
             setPadding(dp(6), dp(6), dp(6), dp(8))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
@@ -1160,6 +1160,47 @@ class MainActivity : Activity() {
         titleView.setTextColor(mainText())
         row.addView(titleView)
         return row
+    }
+
+    private fun cardHeaderDrawable(drawableRes: Int, title: String, warning: Boolean): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+
+        val iconView = ImageView(this)
+        iconView.setImageResource(drawableRes)
+        iconView.setPadding(dp(12), dp(12), dp(12), dp(12))
+        iconView.background = rounded(
+            if (warning) Color.rgb(255, 236, 196) else Color.rgb(216, 255, 244),
+            if (warning) Color.rgb(255, 179, 71) else Color.rgb(0, 229, 184),
+            dp(18)
+        )
+
+        val iconParams = LinearLayout.LayoutParams(dp(66), dp(66))
+        iconParams.setMargins(0, 0, dp(14), 0)
+        row.addView(iconView, iconParams)
+
+        val titleView = TextView(this)
+        titleView.text = title
+        titleView.textSize = 17f
+        titleView.setTypeface(null, Typeface.BOLD)
+        titleView.setTextColor(mainText())
+        row.addView(titleView)
+
+        return row
+    }
+
+    private fun styleButton(button: Button, primary: Boolean) {
+        button.isAllCaps = false
+        button.textSize = 15f
+        button.setTypeface(null, Typeface.BOLD)
+        button.setTextColor(if (primary) Color.WHITE else mainText())
+        button.background = rounded(
+            if (primary) Color.rgb(42, 92, 255) else if (isDark()) Color.rgb(29, 36, 58) else Color.WHITE,
+            if (primary) Color.TRANSPARENT else if (isDark()) Color.rgb(86, 72, 160) else Color.rgb(214, 222, 238),
+            dp(18)
+        )
+        button.setPadding(dp(12), dp(12), dp(12), dp(12))
     }
 
     private fun rowPercent(percent: TextView, status: TextView): LinearLayout {

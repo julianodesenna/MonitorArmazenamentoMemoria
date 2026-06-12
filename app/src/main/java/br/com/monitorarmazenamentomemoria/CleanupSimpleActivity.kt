@@ -70,7 +70,7 @@ class CleanupSimpleActivity : Activity() {
     private fun buildScreen() {
         val main = LinearLayout(this)
         main.orientation = LinearLayout.VERTICAL
-        main.setBackgroundColor(Color.rgb(246, 248, 252))
+        main.setBackgroundColor(Color.rgb(248, 250, 253))
 
         val contentScroll = ScrollView(this)
         root = LinearLayout(this)
@@ -105,9 +105,9 @@ class CleanupSimpleActivity : Activity() {
 
         val title = TextView(this)
         title.text = "Limpeza"
-        title.textSize = 30f
+        title.textSize = 28f
         title.setTypeface(null, Typeface.BOLD)
-        title.setTextColor(Color.rgb(14, 26, 56))
+        title.setTextColor(Color.rgb(10, 18, 36))
         root.addView(title)
 
         statusText = TextView(this)
@@ -176,11 +176,11 @@ class CleanupSimpleActivity : Activity() {
         categoriesTitle.setPadding(0, dp(8), 0, dp(10))
         root.addView(categoriesTitle)
 
-        addCategoryRow("📦", "Arquivos grandes", "Arquivos acima do filtro", "🎬", "Vídeos", "Filtrar vídeos")
-        addCategoryRow("🖼", "Imagens", "Fotos e imagens", "🎵", "Áudios", "Áudios e mensagens de voz")
-        addCategoryRow("💬", "WhatsApp", "Mídias e backups", "🗄", "Backups", "Bancos de dados e cópias")
-        addCategoryRow("🕒", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
-        addCategoryRow("⬇", "Downloads", "Arquivos baixados", "📱", "APKs", "Instaladores antigos")
+        addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
+        addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
+        addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
+        addCategoryRow("◷", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
+        addCategoryRow("↓", "Downloads", "Arquivos baixados", "◇", "APKs", "Instaladores antigos")
     }
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
@@ -198,7 +198,7 @@ class CleanupSimpleActivity : Activity() {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(dp(12), dp(12), dp(12), dp(12))
-        box.background = rounded(Color.WHITE, Color.rgb(225, 230, 240), dp(18))
+        box.background = rounded(Color.WHITE, Color.rgb(218, 225, 240), dp(20))
 
         val t = TextView(this)
         t.text = "$icon\n$title"
@@ -241,7 +241,7 @@ class CleanupSimpleActivity : Activity() {
         title.text = categoryTitle
         title.textSize = 28f
         title.setTypeface(null, Typeface.BOLD)
-        title.setTextColor(Color.rgb(14, 26, 56))
+        title.setTextColor(Color.rgb(10, 18, 36))
         title.setPadding(0, dp(12), 0, dp(4))
         root.addView(title)
 
@@ -916,10 +916,10 @@ class CleanupSimpleActivity : Activity() {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
-        nav.setPadding(dp(8), dp(6), dp(8), dp(28))
-        nav.setBackgroundColor(Color.WHITE)
+        nav.setPadding(dp(8), dp(8), dp(8), dp(10))
+        nav.background = rounded(Color.WHITE, Color.rgb(222, 228, 242), dp(24))
 
-        nav.addView(navItem("📊\nPainel", false) {
+        nav.addView(navItem("◉\nPainel", false) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
         })
@@ -929,7 +929,7 @@ class CleanupSimpleActivity : Activity() {
             finish()
         })
 
-        nav.addView(navItem("🧹\nLimpeza", true) {
+        nav.addView(navItem("✦\nLimpeza", true) {
             drawHome()
         })
 
@@ -946,9 +946,9 @@ class CleanupSimpleActivity : Activity() {
             text = textValue
             textSize = 11f
             gravity = Gravity.CENTER
-            setTextColor(if (active) Color.rgb(20, 92, 210) else Color.rgb(80, 90, 110))
+            setTextColor(if (active) Color.rgb(42, 92, 255) else Color.rgb(80, 90, 110))
             setPadding(dp(4), dp(4), dp(4), dp(6))
-            if (active) background = rounded(Color.rgb(232, 241, 255), Color.TRANSPARENT, dp(14))
+            if (active) background = rounded(Color.rgb(232, 245, 255), Color.TRANSPARENT, dp(16))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
         }
@@ -958,7 +958,7 @@ class CleanupSimpleActivity : Activity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(16))
-            background = rounded(Color.WHITE, Color.rgb(225, 230, 240), dp(20))
+            background = rounded(Color.WHITE, Color.rgb(218, 225, 240), dp(22))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

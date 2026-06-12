@@ -17,8 +17,8 @@
     <application
         android:name=".MonitorApp"
         android:allowBackup="true"
-        android:label="Monitor de Armazenamento e Memória"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:label="Monitor de Armazenamento e Memória"\n        android:icon="@drawable/ic_launcher_eye"\n        android:roundIcon="@drawable/ic_launcher_eye"
+        android:theme="@style/AppThemeMonitor"
         android:supportsRtl="true">
 
         <activity
