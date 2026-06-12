@@ -58,7 +58,13 @@ class CleanupSimpleActivity : Activity() {
     }
 
     override fun onBackPressed() {
-        finish()
+        if (currentCategory.isNotBlank()) {
+            currentCategory = ""
+            selectedFiles.clear()
+            drawHome()
+        } else {
+            finish()
+        }
     }
 
     private fun buildScreen() {
