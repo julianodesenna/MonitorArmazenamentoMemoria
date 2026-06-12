@@ -19,6 +19,7 @@ import android.os.StrictMode
 import android.os.Environment
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowInsets
 import android.widget.*
 import java.io.File
@@ -41,6 +42,12 @@ class CleanupSimpleActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        window.navigationBarColor = Color.WHITE
+        window.statusBarColor = Color.WHITE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true)
         }
@@ -77,7 +84,16 @@ class CleanupSimpleActivity : Activity() {
             1f
         ))
 
-        main.addView(bottomNav())
+        val bottom = bottomNav()
+        main.addView(bottom)
+
+        val safeBottomSpaceForSamsung = View(this)
+        safeBottomSpaceForSamsung.setBackgroundColor(Color.WHITE)
+        main.addView(safeBottomSpaceForSamsung, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(64)
+        ))
+
         setContentView(main)
     }
 
@@ -193,7 +209,7 @@ class CleanupSimpleActivity : Activity() {
 
         val d = TextView(this)
         d.text = "$desc\n${files.size} arquivos • ${formatSize(total)}"
-        d.textSize = 13f
+        d.textSize = 11f
         d.setTextColor(Color.rgb(80, 90, 110))
         d.setPadding(0, dp(6), 0, 0)
         box.addView(d)
@@ -371,14 +387,14 @@ class CleanupSimpleActivity : Activity() {
 
         val detail = TextView(this)
         detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
-        detail.textSize = 13f
+        detail.textSize = 11f
         detail.setTextColor(Color.rgb(80, 90, 110))
         detail.setPadding(0, dp(4), 0, dp(4))
         box.addView(detail)
 
         val path = TextView(this)
         path.text = item.path
-        path.textSize = 12f
+        path.textSize = 11f
         path.setTextColor(Color.rgb(110, 120, 140))
         box.addView(path)
 

@@ -76,6 +76,12 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        window.navigationBarColor = Color.WHITE
+        window.statusBarColor = Color.WHITE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(true)
         }
@@ -902,21 +908,21 @@ class MainActivity : Activity() {
 
         val detail = TextView(this)
         detail.text = "${file.type} • ${Monitor.formatPrecise(file.size)} • ${Monitor.time(file.modified)}"
-        detail.textSize = 13f
+        detail.textSize = 11f
         detail.setTextColor(subText())
         detail.setPadding(0, dp(4), 0, dp(4))
         row.addView(detail)
 
         val path = TextView(this)
         path.text = file.path
-        path.textSize = 12f
+        path.textSize = 11f
         path.setTextColor(subText())
         row.addView(path)
 
         if (file.risk == "alto") {
             val warn = TextView(this)
             warn.text = "Alto risco: pode conter backup, histórico, banco de dados, chave ou documento importante."
-            warn.textSize = 12f
+            warn.textSize = 11f
             warn.setTextColor(Color.rgb(180, 92, 20))
             warn.setPadding(0, dp(6), 0, 0)
             row.addView(warn)
@@ -925,7 +931,7 @@ class MainActivity : Activity() {
         if (file.size == 0L) {
             val zero = TextView(this)
             zero.text = "Tamanho não identificado pelo Android."
-            zero.textSize = 12f
+            zero.textSize = 11f
             zero.setTextColor(Color.rgb(180, 92, 20))
             zero.setPadding(0, dp(4), 0, 0)
             row.addView(zero)
@@ -1183,7 +1189,7 @@ class MainActivity : Activity() {
 
         val l = TextView(this)
         l.text = label
-        l.textSize = 12f
+        l.textSize = 11f
         l.gravity = Gravity.CENTER
         l.setTextColor(subText())
 
@@ -1211,7 +1217,7 @@ class MainActivity : Activity() {
     }
 
     private fun pillText() = TextView(this).apply {
-        textSize = 13f
+        textSize = 11f
         setPadding(dp(12), dp(6), dp(12), dp(6))
     }
 
