@@ -179,6 +179,9 @@ class CleanupSimpleActivity : Activity() {
         addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
         addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
         addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
+        addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
+        addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
+        addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
         addCategoryRow("◷", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
         addCategoryRow("↓", "Downloads", "Arquivos baixados", "◇", "APKs", "Instaladores antigos")
     }
@@ -825,6 +828,54 @@ class CleanupSimpleActivity : Activity() {
         ).distinctBy { it.absolutePath }
     }
 
+    private fun normalizedPath(path: String): String {
+        return path.lowercase(Locale.ROOT).replace("\\", "/")
+    }
+
+    private fun isWhatsAppPath(path: String): Boolean {
+        return normalizedPath(path).contains("whatsapp")
+    }
+
+    private fun isImageName(name: String): Boolean {
+        val n = name.lowercase(Locale.ROOT)
+        return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") || n.endsWith(".gif")
+    }
+
+    private fun isVideoName(name: String): Boolean {
+        val n = name.lowercase(Locale.ROOT)
+        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") || n.endsWith(".avi") || n.endsWith(".3gp")
+    }
+
+    private fun isAudioName(name: String): Boolean {
+        val n = name.lowercase(Locale.ROOT)
+        return n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac") || n.endsWith(".wav") || n.endsWith(".ogg")
+    }
+
+    private fun isDocumentName(name: String): Boolean {
+        val n = name.lowercase(Locale.ROOT)
+        return n.endsWith(".pdf") ||
+            n.endsWith(".doc") || n.endsWith(".docx") ||
+            n.endsWith(".xls") || n.endsWith(".xlsx") ||
+            n.endsWith(".ppt") || n.endsWith(".pptx") ||
+            n.endsWith(".txt") || n.endsWith(".csv") ||
+            n.endsWith(".zip") || n.endsWith(".rar") || n.endsWith(".7z") ||
+            n.endsWith(".xml") || n.endsWith(".json")
+    }
+
+    private fun isWhatsAppBackup(item: FileItem): Boolean {
+        val p = normalizedPath(item.path)
+        val n = item.name.lowercase(Locale.ROOT)
+        return isWhatsAppPath(item.path) && (
+            p.contains("/databases/") ||
+            n.contains("msgstore") ||
+            n.endsWith(".db") ||
+            n.endsWith(".sqlite") ||
+            n.contains(".crypt") ||
+            n.endsWith(".backup") ||
+            n.endsWith(".bak")
+        )
+    }
+
     private fun categoryFiles(category: String): List<FileItem> {
         val minBytes = minSizeMb.toLong() * 1024L * 1024L
 
@@ -839,6 +890,12 @@ class CleanupSimpleActivity : Activity() {
             "Sensíveis" -> allFiles.filter { it.risk == "alto" }
             "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
             "APKs" -> allFiles.filter { it.category == "APKs" }
+            "Fotos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isImageName(it.name) }
+            "Vídeos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isVideoName(it.name) }
+            "Documentos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isDocumentName(it.name) }
+            "Áudios do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isAudioName(it.name) }
+            "Backups do WhatsApp" -> allFiles.filter { isWhatsAppBackup(it) }
+            "Todos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
             else -> allFiles
         }
     }
