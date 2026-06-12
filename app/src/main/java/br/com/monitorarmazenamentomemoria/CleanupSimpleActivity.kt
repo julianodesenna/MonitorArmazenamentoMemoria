@@ -946,9 +946,9 @@ class CleanupSimpleActivity : Activity() {
             text = textValue
             textSize = 11f
             gravity = Gravity.CENTER
-            setTextColor(if (active) Color.rgb(42, 92, 255) else Color.rgb(80, 90, 110))
+            setTextColor(if (active) Color.rgb(51, 146, 255) else Color.rgb(80, 90, 110))
             setPadding(dp(4), dp(4), dp(4), dp(6))
-            if (active) background = rounded(Color.rgb(232, 245, 255), Color.TRANSPARENT, dp(16))
+            if (active) background = rounded(Color.rgb(235, 244, 255), Color.TRANSPARENT, dp(18))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { action() }
         }
@@ -974,6 +974,17 @@ class CleanupSimpleActivity : Activity() {
             textSize = 20f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.rgb(14, 26, 56))
+        }
+    }
+
+
+    private fun safeBottomSpaceForSamsung(): View {
+        return View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(26)
+            )
+            setBackgroundColor(Color.WHITE)
         }
     }
 
