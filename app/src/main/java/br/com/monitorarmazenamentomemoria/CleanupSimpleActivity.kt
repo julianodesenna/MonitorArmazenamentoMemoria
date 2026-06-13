@@ -41,6 +41,7 @@ class CleanupSimpleActivity : Activity() {
     private var allFiles: List<FileItem> = emptyList()
     private val selectedFiles = mutableSetOf<String>()
     private var categoryDisplayLimit = 120
+    private var yearFilter = "Todos"
     private var autoLoadMoreLocked = false
     private lateinit var selectedInfoText: TextView
 
@@ -104,6 +105,9 @@ class CleanupSimpleActivity : Activity() {
     private fun drawHome() {
         currentCategory = ""
         categoryDisplayLimit = 120
+        yearFilter = "Todos"
+        categoryDisplayLimit = 120
+        yearFilter = "Todos"
         root.removeAllViews()
 
         val data = Monitor.read(this)
@@ -239,6 +243,7 @@ class CleanupSimpleActivity : Activity() {
     private fun showCategory(categoryTitle: String, categoryDesc: String) {
         if (currentCategory != categoryTitle) {
             categoryDisplayLimit = 120
+            yearFilter = "Todos"
         }
         autoLoadMoreLocked = false
         currentCategory = categoryTitle
@@ -311,9 +316,60 @@ class CleanupSimpleActivity : Activity() {
         orderRow.addView(antigo, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         filter.addView(orderRow)
 
+        val rawCategoryItems = categoryFiles(categoryTitle)
+        val availableYearValues = availableYears(rawCategoryItems)
+        val yearOptions = mutableListOf("Todos")
+        yearOptions.addAll(availableYearValues.take(5).map { it.toString() })
+        if (availableYearValues.size > 5) {
+            yearOptions.add("Antigos")
+        }
+
+        if (availableYearValues.isNotEmpty()) {
+            val yearTitle = TextView(this)
+            yearTitle.text = "Ano"
+            yearTitle.textSize = 13f
+            yearTitle.setTypeface(null, Typeface.BOLD)
+            yearTitle.setTextColor(Color.rgb(14, 26, 56))
+            yearTitle.setPadding(0, dp(10), 0, dp(4))
+            filter.addView(yearTitle)
+
+            fun makeYearButton(label: String): Button {
+                return Button(this).apply {
+                    text = if (yearFilter == label) "✓ $label" else label
+                    setOnClickListener {
+                        yearFilter = label
+                        categoryDisplayLimit = 120
+                        showCategory(categoryTitle, categoryDesc)
+                    }
+                }
+            }
+
+            yearOptions.chunked(3).forEach { rowItems ->
+                val yearRow = LinearLayout(this)
+                yearRow.orientation = LinearLayout.HORIZONTAL
+
+                rowItems.forEach { label ->
+                    yearRow.addView(
+                        makeYearButton(label),
+                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    )
+                }
+
+                repeat(3 - rowItems.size) {
+                    val spacer = TextView(this)
+                    yearRow.addView(
+                        spacer,
+                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    )
+                }
+
+                filter.addView(yearRow)
+            }
+        }
+
         root.addView(filter)
 
-        val allCategoryItems = ordered(categoryFiles(categoryTitle))
+        val allCategoryItems = ordered(filterByYear(rawCategoryItems))
         val files = allCategoryItems.take(categoryDisplayLimit)
 
         val selectionBox = card()
@@ -374,7 +430,8 @@ class CleanupSimpleActivity : Activity() {
         updateSelectedInfo()
 
         val summary = TextView(this)
-        summary.text = "${files.size} de ${allCategoryItems.size} arquivos mostrados • exibidos: ${formatSize(files.sumOf { it.size })} • total: ${formatSize(allCategoryItems.sumOf { it.size })}"
+        val yearInfo = if (yearFilter == "Todos") "" else " • ano: $yearFilter"
+        summary.text = "${files.size} de ${allCategoryItems.size} arquivos mostrados$yearInfo • exibidos: ${formatSize(files.sumOf { it.size })} • total: ${formatSize(allCategoryItems.sumOf { it.size })}"
         summary.textSize = 14f
         summary.setTextColor(Color.rgb(80, 90, 110))
         summary.setPadding(0, dp(4), 0, dp(12))
@@ -1147,6 +1204,31 @@ class CleanupSimpleActivity : Activity() {
                 }, 120)
             }
         }
+    }
+
+    private fun itemYear(item: FileItem): Int {
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = item.modified
+        return cal.get(java.util.Calendar.YEAR)
+    }
+
+    private fun availableYears(files: List<FileItem>): List<Int> {
+        return files.map { itemYear(it) }.distinct().sortedDescending()
+    }
+
+    private fun filterByYear(files: List<FileItem>): List<FileItem> {
+        if (yearFilter == "Todos") return files
+
+        val years = availableYears(files)
+
+        if (yearFilter == "Antigos") {
+            val olderYears = years.drop(5).toSet()
+            if (olderYears.isEmpty()) return files
+            return files.filter { itemYear(it) in olderYears }
+        }
+
+        val selectedYear = yearFilter.toIntOrNull() ?: return files
+        return files.filter { itemYear(it) == selectedYear }
     }
 
     private fun ordered(files: List<FileItem>): List<FileItem> {
