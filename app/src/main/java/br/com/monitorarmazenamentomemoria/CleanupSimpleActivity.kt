@@ -199,6 +199,7 @@ class CleanupSimpleActivity : Activity() {
         addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
         addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
         addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
+            "Novos nas últimas 24h",
         addCategoryRow("◷", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
         addCategoryRow("↓", "Downloads", "Arquivos baixados", "◇", "APKs", "Instaladores antigos")
     }
@@ -1450,6 +1451,8 @@ class CleanupSimpleActivity : Activity() {
         val minBytes = minSizeMb.toLong() * 1024L * 1024L
 
         return when (category) {
+            "Novos nas últimas 24h" -> allFiles.filter { isLast24Hours(it) }
+
             "Arquivos grandes" -> allFiles.filter { it.size >= minBytes }
             "Vídeos" -> allFiles.filter { it.category == "Vídeos" && it.size >= minBytes }
             "Imagens" -> allFiles.filter { it.category == "Imagens" && it.size >= minBytes }
@@ -1511,6 +1514,13 @@ class CleanupSimpleActivity : Activity() {
                 }, 120)
             }
         }
+    }
+
+
+    private fun isLast24Hours(item: FileItem): Boolean {
+        val now = System.currentTimeMillis()
+        val limit = now - 24L * 60L * 60L * 1000L
+        return item.modified >= limit
     }
 
     private fun itemYear(item: FileItem): Int {
