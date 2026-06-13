@@ -383,9 +383,35 @@ class CleanupSimpleActivity : Activity() {
     private fun fileRow(item: FileItem): LinearLayout {
         val box = card()
 
+        fun showFileDetails() {
+            AlertDialog.Builder(this)
+                .setTitle(item.name)
+                .setMessage(
+                    "Tipo: ${item.type}\n" +
+                    "Tamanho: ${formatSize(item.size)}\n" +
+                    "Modificado: ${formatDate(item.modified)}\n" +
+                    "Risco: ${if (item.risk == "alto") "alto" else "normal"}\n\n" +
+                    "Local:\n${item.path}"
+                )
+                .setPositiveButton("Abrir") { _, _ ->
+                    openFile(item)
+                }
+                .setNegativeButton("Fechar", null)
+                .show()
+        }
+
+        fun openThisFile() {
+            openFile(item)
+        }
+
         val titleRow = LinearLayout(this)
         titleRow.orientation = LinearLayout.HORIZONTAL
         titleRow.gravity = Gravity.CENTER_VERTICAL
+        titleRow.setOnClickListener { openThisFile() }
+        titleRow.setOnLongClickListener {
+            showFileDetails()
+            true
+        }
 
         val name = TextView(this)
         name.text = if (item.risk == "alto") "⚠ ${item.name}" else item.name
@@ -393,6 +419,11 @@ class CleanupSimpleActivity : Activity() {
         name.setTypeface(null, Typeface.BOLD)
         name.setTextColor(Color.rgb(14, 26, 56))
         name.maxLines = 2
+        name.setOnClickListener { openThisFile() }
+        name.setOnLongClickListener {
+            showFileDetails()
+            true
+        }
 
         val nameParams = LinearLayout.LayoutParams(
             0,
@@ -446,6 +477,11 @@ class CleanupSimpleActivity : Activity() {
         detail.textSize = 12f
         detail.setTextColor(Color.rgb(80, 90, 110))
         detail.setPadding(0, dp(6), 0, dp(4))
+        detail.setOnClickListener { openThisFile() }
+        detail.setOnLongClickListener {
+            showFileDetails()
+            true
+        }
         box.addView(detail)
 
         val pathView = TextView(this)
@@ -454,30 +490,29 @@ class CleanupSimpleActivity : Activity() {
         pathView.setTextColor(Color.rgb(110, 120, 140))
         pathView.maxLines = 3
         pathView.setPadding(0, 0, 0, dp(6))
+        pathView.setOnClickListener { openThisFile() }
+        pathView.setOnLongClickListener {
+            showFileDetails()
+            true
+        }
         box.addView(pathView)
 
         val hint = TextView(this)
-        hint.text = "Toque no card para abrir ou ver detalhes"
+        hint.text = "Toque para abrir • segure para detalhes"
         hint.textSize = 11f
         hint.setTextColor(Color.rgb(42, 92, 255))
         hint.setPadding(0, dp(2), 0, 0)
+        hint.setOnClickListener { openThisFile() }
+        hint.setOnLongClickListener {
+            showFileDetails()
+            true
+        }
         box.addView(hint)
 
-        box.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(item.name)
-                .setMessage(
-                    "Tipo: ${item.type}\n" +
-                    "Tamanho: ${formatSize(item.size)}\n" +
-                    "Modificado: ${formatDate(item.modified)}\n" +
-                    "Risco: ${if (item.risk == "alto") "alto" else "normal"}\n\n" +
-                    "Local:\n${item.path}"
-                )
-                .setPositiveButton("Abrir") { _, _ ->
-                    openFile(item)
-                }
-                .setNegativeButton("Fechar", null)
-                .show()
+        box.setOnClickListener { openThisFile() }
+        box.setOnLongClickListener {
+            showFileDetails()
+            true
         }
 
         return box
