@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import android.content.ContentUris
 import android.content.ClipData
 import android.graphics.Color
+import android.media.ThumbnailUtils
 import android.widget.ImageView
 import android.media.MediaMetadataRetriever
 import android.graphics.BitmapFactory
@@ -577,7 +578,7 @@ class CleanupSimpleActivity : Activity() {
             }
 
             var sample = 1
-            val target = dp(96)
+            val target = dp(120)
 
             while ((bounds.outWidth / sample) > target || (bounds.outHeight / sample) > target) {
                 sample *= 2
@@ -587,7 +588,8 @@ class CleanupSimpleActivity : Activity() {
                 inSampleSize = sample
             }
 
-            BitmapFactory.decodeFile(file.absolutePath, opts)
+            val raw = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
+            ThumbnailUtils.extractThumbnail(raw, dp(96), dp(96))
         } catch (_: Exception) {
             null
         }
@@ -598,7 +600,17 @@ class CleanupSimpleActivity : Activity() {
 
         return try {
             retriever.setDataSource(file.absolutePath)
-            retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+            val frame = retriever.getFrameAtTime(
+                1_000_000,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            ) ?: retriever.frameAtTime
+
+            if (frame != null) {
+                ThumbnailUtils.extractThumbnail(frame, dp(96), dp(96))
+            } else {
+                null
+            }
         } catch (_: Exception) {
             null
         } finally {
@@ -627,7 +639,7 @@ class CleanupSimpleActivity : Activity() {
         }
 
         if (bmp != null) {
-            if (previewCache.size > 180) {
+            if (previewCache.size > 160) {
                 previewCache.clear()
             }
 
@@ -660,9 +672,20 @@ class CleanupSimpleActivity : Activity() {
             dp(12)
         )
 
+        val fallback = fileFallbackIconView(item)
+        wrap.addView(
+            fallback,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
         val bmp = loadPreviewBitmap(item)
 
         if (bmp != null) {
+            wrap.removeAllViews()
+
             val img = ImageView(this)
             img.scaleType = ImageView.ScaleType.CENTER_CROP
             img.setImageBitmap(bmp)
@@ -682,7 +705,7 @@ class CleanupSimpleActivity : Activity() {
                 play.gravity = Gravity.CENTER
                 play.setTextColor(Color.WHITE)
                 play.background = rounded(
-                    Color.argb(155, 0, 0, 0),
+                    Color.argb(170, 0, 0, 0),
                     Color.argb(0, 0, 0, 0),
                     dp(18)
                 )
@@ -691,14 +714,6 @@ class CleanupSimpleActivity : Activity() {
                 playParams.gravity = Gravity.CENTER
                 wrap.addView(play, playParams)
             }
-        } else {
-            wrap.addView(
-                fileFallbackIconView(item),
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
         }
 
         return wrap
@@ -772,7 +787,7 @@ class CleanupSimpleActivity : Activity() {
         val fileIcon = filePreviewView(item)
         fileIcon.setOnClickListener { openThisFile() }
 
-        val iconParams = LinearLayout.LayoutParams(dp(48), dp(48))
+        val iconParams = LinearLayout.LayoutParams(dp(52), dp(52))
         iconParams.setMargins(0, 0, dp(10), 0)
         titleRow.addView(fileIcon, iconParams)
 
