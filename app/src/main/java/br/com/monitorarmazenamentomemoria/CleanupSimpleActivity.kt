@@ -1,4 +1,6 @@
 package br.com.monitorarmazenamentomemoria
+import androidx.core.content.FileProvider
+import android.content.ActivityNotFoundException
 
 import android.app.Activity
 import android.app.AlertDialog
@@ -667,41 +669,119 @@ class CleanupSimpleActivity : Activity() {
 
 
 
+
+    private fun looksLikePdfContent(file: File): Boolean {
+        return try {
+            if (!file.exists() || !file.isFile || file.length() < 5) return false
+            file.inputStream().use { input ->
+                val buffer = ByteArray(5)
+                val read = input.read(buffer)
+                read == 5 && String(buffer, Charsets.US_ASCII) == "%PDF-"
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun detectOpenMime(file: File): String {
+        val n = file.name.lowercase(Locale.ROOT)
+
+        if (n.endsWith(".pdf") || looksLikePdfContent(file)) return "application/pdf"
+
+        return when {
+            n.endsWith(".jpg") || n.endsWith(".jpeg") -> "image/jpeg"
+            n.endsWith(".png") -> "image/png"
+            n.endsWith(".webp") -> "image/webp"
+            n.endsWith(".gif") -> "image/gif"
+
+            n.endsWith(".mp4") -> "video/mp4"
+            n.endsWith(".3gp") -> "video/3gpp"
+            n.endsWith(".mkv") -> "video/*"
+            n.endsWith(".mov") -> "video/*"
+            n.endsWith(".avi") -> "video/*"
+
+            n.endsWith(".mp3") -> "audio/mpeg"
+            n.endsWith(".m4a") -> "audio/mp4"
+            n.endsWith(".aac") -> "audio/aac"
+            n.endsWith(".opus") -> "audio/opus"
+            n.endsWith(".ogg") -> "audio/ogg"
+            n.endsWith(".wav") -> "audio/wav"
+
+            n.endsWith(".doc") || n.endsWith(".docx") -> "application/msword"
+            n.endsWith(".xls") || n.endsWith(".xlsx") -> "application/vnd.ms-excel"
+            n.endsWith(".ppt") || n.endsWith(".pptx") -> "application/vnd.ms-powerpoint"
+            n.endsWith(".txt") -> "text/plain"
+            n.endsWith(".csv") -> "text/csv"
+            n.endsWith(".zip") -> "application/zip"
+
+            else -> "*/*"
+        }
+    }
+
+    private fun prepareOpenFile(file: File, mimeType: String): File {
+        val nameLower = file.name.lowercase(Locale.ROOT)
+
+        if (mimeType == "application/pdf" && !nameLower.endsWith(".pdf")) {
+            val dir = File(cacheDir, "open_pdf")
+            if (!dir.exists()) dir.mkdirs()
+
+            val safeName = file.name
+                .ifBlank { "documento" }
+                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                .trim('.')
+                .ifBlank { "documento" }
+
+            val out = File(dir, "$safeName.pdf")
+
+            if (!out.exists() || out.length() != file.length() || out.lastModified() < file.lastModified()) {
+                file.copyTo(out, overwrite = true)
+                out.setLastModified(file.lastModified())
+            }
+
+            return out
+        }
+
+        return file
+    }
+
+
     private fun openFile(item: FileItem) {
         try {
-            val file = File(item.path)
-            if (!file.exists()) {
-                Toast.makeText(this, "Arquivo não encontrado", Toast.LENGTH_SHORT).show()
+            val originalFile = File(item.path)
+
+            if (!originalFile.exists() || !originalFile.isFile) {
+                Toast.makeText(this, "Arquivo não encontrado ou indisponível.", Toast.LENGTH_LONG).show()
                 return
             }
 
-            try {
-                StrictMode::class.java
-                    .getMethod("disableDeathOnFileUriExposure")
-                    .invoke(null)
-            } catch (_: Exception) {}
+            val mimeType = detectOpenMime(originalFile)
+            val openFile = prepareOpenFile(originalFile, mimeType)
 
-            val uri = fileUriFor(file)
-            val mime = mimeType(file.name)
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                openFile
+            )
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                setDataAndType(uri, mimeType)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                clipData = ClipData.newUri(contentResolver, file.name, uri)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                clipData = ClipData.newUri(contentResolver, openFile.name, uri)
             }
 
-            startActivity(intent)
-        } catch (_: Exception) {
-            AlertDialog.Builder(this)
-                .setTitle("Não foi possível abrir")
-                .setMessage(
-                    "O Android não encontrou um aplicativo padrão para abrir este arquivo.\n\n" +
-                    "Escolha um app e marque Sempre quando o Android perguntar.\n\n" +
-                    "Arquivo:\n${item.path}"
-                )
-                .setPositiveButton("OK", null)
-                .show()
+            try {
+                startActivity(intent)
+            } catch (_: ActivityNotFoundException) {
+                val chooser = Intent.createChooser(intent, "Abrir arquivo")
+                startActivity(chooser)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Não foi possível abrir este arquivo. Tente compartilhar ou abrir por outro app.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
