@@ -304,16 +304,16 @@ class CleanupSimpleActivity : Activity() {
             return Button(this).apply {
                 val shownLabel = if (label == "Antes de 2017") "Antes 2017" else label
                 text = if (active) "✓ $shownLabel" else shownLabel
-                textSize = 12f
+                textSize = 11f
                 setAllCaps(false)
-                minHeight = dp(34)
+                minHeight = dp(30)
                 minWidth = 0
-                setPadding(dp(10), 0, dp(10), 0)
+                setPadding(dp(8), 0, dp(8), 0)
                 setTextColor(if (active) Color.WHITE else Color.rgb(35, 45, 65))
                 background = rounded(
                     if (active) Color.rgb(42, 92, 255) else Color.rgb(245, 247, 251),
                     if (active) Color.rgb(42, 92, 255) else Color.rgb(218, 225, 236),
-                    dp(18)
+                    dp(16)
                 )
                 setOnClickListener { onClick() }
             }
@@ -322,19 +322,19 @@ class CleanupSimpleActivity : Activity() {
         fun addChip(row: LinearLayout, button: Button) {
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                dp(36)
+                dp(32)
             )
-            params.setMargins(0, 0, dp(8), dp(8))
+            params.setMargins(0, 0, dp(6), dp(6))
             row.addView(button, params)
         }
 
         fun addWeightedChip(row: LinearLayout, button: Button) {
             val params = LinearLayout.LayoutParams(
                 0,
-                dp(36),
+                dp(32),
                 1f
             )
-            params.setMargins(0, 0, dp(8), dp(8))
+            params.setMargins(0, 0, dp(6), dp(6))
             row.addView(button, params)
         }
 
@@ -358,7 +358,7 @@ class CleanupSimpleActivity : Activity() {
         val activeYear = if (yearFilter == "Todos") "" else " • $yearFilter"
         val filterResume = TextView(this)
         filterResume.text = "${if (orderMode == "size") "Maiores" else if (orderMode == "date") "Recentes" else "Antigos"}$activeYear"
-        filterResume.textSize = 12f
+        filterResume.textSize = 11f
         filterResume.setTextColor(Color.rgb(80, 90, 110))
         filterTitleRow.addView(filterResume)
 
@@ -413,7 +413,7 @@ class CleanupSimpleActivity : Activity() {
 
         val yearTitle = TextView(this)
         yearTitle.text = "Ano"
-        yearTitle.textSize = 12f
+        yearTitle.textSize = 11f
         yearTitle.setTypeface(null, Typeface.BOLD)
         yearTitle.setTextColor(Color.rgb(80, 90, 110))
         yearTitle.setPadding(0, dp(4), 0, dp(6))
@@ -467,7 +467,7 @@ class CleanupSimpleActivity : Activity() {
         )
 
         selectedInfoText = TextView(this)
-        selectedInfoText.textSize = 12f
+        selectedInfoText.textSize = 11f
         selectedInfoText.setTextColor(Color.rgb(80, 90, 110))
         selectedInfoText.gravity = Gravity.END
         selectionHeader.addView(selectedInfoText)
@@ -727,7 +727,7 @@ class CleanupSimpleActivity : Activity() {
                 play.background = rounded(
                     Color.argb(170, 0, 0, 0),
                     Color.argb(0, 0, 0, 0),
-                    dp(18)
+                    dp(16)
                 )
 
                 val playParams = FrameLayout.LayoutParams(dp(24), dp(24))
@@ -882,7 +882,7 @@ class CleanupSimpleActivity : Activity() {
 
         val detail = TextView(this)
         detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
-        detail.textSize = 12f
+        detail.textSize = 11f
         detail.setTextColor(Color.rgb(80, 90, 110))
         detail.setPadding(0, dp(6), 0, dp(4))
         detail.setOnClickListener { openThisFile() }
