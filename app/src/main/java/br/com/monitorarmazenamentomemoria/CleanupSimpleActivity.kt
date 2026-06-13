@@ -199,7 +199,7 @@ class CleanupSimpleActivity : Activity() {
         addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
         addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
         addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
-            "Novos nas últimas 24h",
+        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Recentes", "Arquivos modificados recentemente")
         addCategoryRow("◷", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
         addCategoryRow("↓", "Downloads", "Arquivos baixados", "◇", "APKs", "Instaladores antigos")
     }
@@ -1375,6 +1375,7 @@ class CleanupSimpleActivity : Activity() {
     private fun importantRoots(): List<File> {
         val base = Environment.getExternalStorageDirectory()
         return listOf(
+            "Novos nas últimas 24h",
             File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents"),
             File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Sent"),
             File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents"),
