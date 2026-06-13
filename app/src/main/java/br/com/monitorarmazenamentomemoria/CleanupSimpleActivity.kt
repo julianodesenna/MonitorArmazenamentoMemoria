@@ -1375,7 +1375,6 @@ class CleanupSimpleActivity : Activity() {
     private fun importantRoots(): List<File> {
         val base = Environment.getExternalStorageDirectory()
         return listOf(
-            "Novos nas últimas 24h",
             File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents"),
             File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Sent"),
             File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents"),
