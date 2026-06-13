@@ -318,13 +318,13 @@ class CleanupSimpleActivity : Activity() {
 
         val rawCategoryItems = categoryFiles(categoryTitle)
         val availableYearValues = availableYears(rawCategoryItems)
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val fixedYearOptions = (currentYear downTo 2017).map { it.toString() }
         val yearOptions = mutableListOf("Todos")
-        yearOptions.addAll(availableYearValues.take(5).map { it.toString() })
-        if (availableYearValues.size > 5) {
-            yearOptions.add("Antigos")
-        }
+        yearOptions.addAll(fixedYearOptions)
+        yearOptions.add("Antes de 2017")
 
-        if (availableYearValues.isNotEmpty()) {
+        if (yearOptions.isNotEmpty()) {
             val yearTitle = TextView(this)
             yearTitle.text = "Ano"
             yearTitle.textSize = 13f
@@ -1219,12 +1219,8 @@ class CleanupSimpleActivity : Activity() {
     private fun filterByYear(files: List<FileItem>): List<FileItem> {
         if (yearFilter == "Todos") return files
 
-        val years = availableYears(files)
-
-        if (yearFilter == "Antigos") {
-            val olderYears = years.drop(5).toSet()
-            if (olderYears.isEmpty()) return files
-            return files.filter { itemYear(it) in olderYears }
+        if (yearFilter == "Antes de 2017") {
+            return files.filter { itemYear(it) < 2017 }
         }
 
         val selectedYear = yearFilter.toIntOrNull() ?: return files
