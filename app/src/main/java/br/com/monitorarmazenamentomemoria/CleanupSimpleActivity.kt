@@ -403,14 +403,41 @@ class CleanupSimpleActivity : Activity() {
         path.setTextColor(Color.rgb(110, 120, 140))
         box.addView(path)
 
+        val selectTouchArea = LinearLayout(this)
+        selectTouchArea.orientation = LinearLayout.HORIZONTAL
+        selectTouchArea.gravity = Gravity.CENTER_VERTICAL
+        selectTouchArea.setPadding(dp(6), dp(8), dp(6), dp(8))
+        selectTouchArea.minimumHeight = dp(48)
+
         val check = CheckBox(this)
-        check.text = "Selecionar"
+        check.text = ""
+        check.isClickable = false
+        check.isFocusable = false
         check.isChecked = selectedFiles.contains(item.path)
-        check.setOnCheckedChangeListener { _, checked ->
-            if (checked) selectedFiles.add(item.path) else selectedFiles.remove(item.path)
+
+        val checkParams = LinearLayout.LayoutParams(dp(42), dp(42))
+        selectTouchArea.addView(check, checkParams)
+
+        val selectLabel = TextView(this)
+        selectLabel.text = "Selecionar"
+        selectLabel.textSize = 13f
+        selectLabel.setTextColor(Color.rgb(70, 82, 105))
+        selectLabel.setPadding(dp(2), 0, 0, 0)
+        selectTouchArea.addView(selectLabel)
+
+        selectTouchArea.setOnClickListener {
+            val selected = selectedFiles.contains(item.path)
+            if (selected) {
+                selectedFiles.remove(item.path)
+                check.isChecked = false
+            } else {
+                selectedFiles.add(item.path)
+                check.isChecked = true
+            }
             updateSelectedInfo()
         }
-        box.addView(check)
+
+        box.addView(selectTouchArea)
 
         box.setOnClickListener {
             AlertDialog.Builder(this)
