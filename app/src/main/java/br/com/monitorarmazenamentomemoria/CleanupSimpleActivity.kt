@@ -272,100 +272,151 @@ class CleanupSimpleActivity : Activity() {
         subtitle.setPadding(0, 0, 0, dp(14))
         root.addView(subtitle)
 
+        val rawCategoryItems = categoryFiles(categoryTitle)
+
+        fun chipButton(label: String, active: Boolean, onClick: () -> Unit): Button {
+            return Button(this).apply {
+                val shownLabel = if (label == "Antes de 2017") "Antes 2017" else label
+                text = if (active) "✓ $shownLabel" else shownLabel
+                textSize = 12f
+                setAllCaps(false)
+                minHeight = dp(34)
+                minWidth = 0
+                setPadding(dp(10), 0, dp(10), 0)
+                setTextColor(if (active) Color.WHITE else Color.rgb(35, 45, 65))
+                background = rounded(
+                    if (active) Color.rgb(42, 92, 255) else Color.rgb(245, 247, 251),
+                    if (active) Color.rgb(42, 92, 255) else Color.rgb(218, 225, 236),
+                    dp(18)
+                )
+                setOnClickListener { onClick() }
+            }
+        }
+
+        fun addChip(row: LinearLayout, button: Button) {
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(36)
+            )
+            params.setMargins(0, 0, dp(8), dp(8))
+            row.addView(button, params)
+        }
+
+        fun addWeightedChip(row: LinearLayout, button: Button) {
+            val params = LinearLayout.LayoutParams(
+                0,
+                dp(36),
+                1f
+            )
+            params.setMargins(0, 0, dp(8), dp(8))
+            row.addView(button, params)
+        }
+
         val filter = card()
-        filter.addView(titleText("Filtros"))
+        filter.setPadding(dp(14), dp(14), dp(14), dp(10))
+
+        val filterTitleRow = LinearLayout(this)
+        filterTitleRow.orientation = LinearLayout.HORIZONTAL
+        filterTitleRow.gravity = Gravity.CENTER_VERTICAL
+
+        val filterTitle = TextView(this)
+        filterTitle.text = "Filtros"
+        filterTitle.textSize = 18f
+        filterTitle.setTypeface(null, Typeface.BOLD)
+        filterTitle.setTextColor(Color.rgb(14, 26, 56))
+        filterTitleRow.addView(
+            filterTitle,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
+
+        val activeYear = if (yearFilter == "Todos") "" else " • $yearFilter"
+        val filterResume = TextView(this)
+        filterResume.text = "${if (orderMode == "size") "Maiores" else if (orderMode == "date") "Recentes" else "Antigos"}$activeYear"
+        filterResume.textSize = 12f
+        filterResume.setTextColor(Color.rgb(80, 90, 110))
+        filterTitleRow.addView(filterResume)
+
+        filter.addView(filterTitleRow)
 
         val sizeRow = LinearLayout(this)
         sizeRow.orientation = LinearLayout.HORIZONTAL
+        sizeRow.setPadding(0, dp(10), 0, 0)
 
-        val f10 = filterButton("+10 MB", 10)
-        val f50 = filterButton("+50 MB", 50)
-        val f100 = filterButton("+100 MB", 100)
+        addWeightedChip(sizeRow, chipButton("10 MB", minSizeMb == 10) {
+            minSizeMb = 10
+            categoryDisplayLimit = 120
+            showCategory(categoryTitle, categoryDesc)
+        })
 
-        sizeRow.addView(f10, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        sizeRow.addView(f50, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        sizeRow.addView(f100, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addWeightedChip(sizeRow, chipButton("50 MB", minSizeMb == 50) {
+            minSizeMb = 50
+            categoryDisplayLimit = 120
+            showCategory(categoryTitle, categoryDesc)
+        })
+
+        addWeightedChip(sizeRow, chipButton("100 MB", minSizeMb == 100) {
+            minSizeMb = 100
+            categoryDisplayLimit = 120
+            showCategory(categoryTitle, categoryDesc)
+        })
+
         filter.addView(sizeRow)
 
         val orderRow = LinearLayout(this)
         orderRow.orientation = LinearLayout.HORIZONTAL
 
-        val maior = Button(this)
-        maior.text = if (orderMode == "size") "✓ Maiores" else "Maiores"
-        maior.setOnClickListener {
+        addWeightedChip(orderRow, chipButton("Maiores", orderMode == "size") {
             orderMode = "size"
+            categoryDisplayLimit = 120
             showCategory(categoryTitle, categoryDesc)
-        }
+        })
 
-        val recente = Button(this)
-        recente.text = if (orderMode == "date") "✓ Recentes" else "Recentes"
-        recente.setOnClickListener {
+        addWeightedChip(orderRow, chipButton("Recentes", orderMode == "date") {
             orderMode = "date"
+            categoryDisplayLimit = 120
             showCategory(categoryTitle, categoryDesc)
-        }
+        })
 
-        val antigo = Button(this)
-        antigo.text = if (orderMode == "old") "✓ Antigos" else "Antigos"
-        antigo.setOnClickListener {
+        addWeightedChip(orderRow, chipButton("Antigos", orderMode == "old") {
             orderMode = "old"
+            categoryDisplayLimit = 120
             showCategory(categoryTitle, categoryDesc)
-        }
+        })
 
-        orderRow.addView(maior, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        orderRow.addView(recente, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        orderRow.addView(antigo, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         filter.addView(orderRow)
 
-        val rawCategoryItems = categoryFiles(categoryTitle)
-        val availableYearValues = availableYears(rawCategoryItems)
+        val yearTitle = TextView(this)
+        yearTitle.text = "Ano"
+        yearTitle.textSize = 12f
+        yearTitle.setTypeface(null, Typeface.BOLD)
+        yearTitle.setTextColor(Color.rgb(80, 90, 110))
+        yearTitle.setPadding(0, dp(4), 0, dp(6))
+        filter.addView(yearTitle)
+
         val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-        val fixedYearOptions = (currentYear downTo 2017).map { it.toString() }
         val yearOptions = mutableListOf("Todos")
-        yearOptions.addAll(fixedYearOptions)
+        yearOptions.addAll((currentYear downTo 2017).map { it.toString() })
         yearOptions.add("Antes de 2017")
 
-        if (yearOptions.isNotEmpty()) {
-            val yearTitle = TextView(this)
-            yearTitle.text = "Ano"
-            yearTitle.textSize = 13f
-            yearTitle.setTypeface(null, Typeface.BOLD)
-            yearTitle.setTextColor(Color.rgb(14, 26, 56))
-            yearTitle.setPadding(0, dp(10), 0, dp(4))
-            filter.addView(yearTitle)
+        val yearScroll = android.widget.HorizontalScrollView(this)
+        yearScroll.isHorizontalScrollBarEnabled = false
 
-            fun makeYearButton(label: String): Button {
-                return Button(this).apply {
-                    text = if (yearFilter == label) "✓ $label" else label
-                    setOnClickListener {
-                        yearFilter = label
-                        categoryDisplayLimit = 120
-                        showCategory(categoryTitle, categoryDesc)
-                    }
+        val yearRow = LinearLayout(this)
+        yearRow.orientation = LinearLayout.HORIZONTAL
+
+        yearOptions.forEach { label ->
+            addChip(
+                yearRow,
+                chipButton(label, yearFilter == label) {
+                    yearFilter = label
+                    categoryDisplayLimit = 120
+                    showCategory(categoryTitle, categoryDesc)
                 }
-            }
-
-            yearOptions.chunked(3).forEach { rowItems ->
-                val yearRow = LinearLayout(this)
-                yearRow.orientation = LinearLayout.HORIZONTAL
-
-                rowItems.forEach { label ->
-                    yearRow.addView(
-                        makeYearButton(label),
-                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    )
-                }
-
-                repeat(3 - rowItems.size) {
-                    val spacer = TextView(this)
-                    yearRow.addView(
-                        spacer,
-                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    )
-                }
-
-                filter.addView(yearRow)
-            }
+            )
         }
+
+        yearScroll.addView(yearRow)
+        filter.addView(yearScroll)
 
         root.addView(filter)
 
@@ -373,58 +424,72 @@ class CleanupSimpleActivity : Activity() {
         val files = allCategoryItems.take(categoryDisplayLimit)
 
         val selectionBox = card()
-        selectionBox.addView(titleText("Seleção"))
+        selectionBox.setPadding(dp(14), dp(14), dp(14), dp(10))
+
+        val selectionHeader = LinearLayout(this)
+        selectionHeader.orientation = LinearLayout.HORIZONTAL
+        selectionHeader.gravity = Gravity.CENTER_VERTICAL
+
+        val selectionTitle = TextView(this)
+        selectionTitle.text = "Seleção"
+        selectionTitle.textSize = 18f
+        selectionTitle.setTypeface(null, Typeface.BOLD)
+        selectionTitle.setTextColor(Color.rgb(14, 26, 56))
+        selectionHeader.addView(
+            selectionTitle,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
 
         selectedInfoText = TextView(this)
-        selectedInfoText.textSize = 14f
+        selectedInfoText.textSize = 12f
         selectedInfoText.setTextColor(Color.rgb(80, 90, 110))
-        selectedInfoText.setPadding(0, dp(6), 0, dp(8))
-        selectionBox.addView(selectedInfoText)
+        selectedInfoText.gravity = Gravity.END
+        selectionHeader.addView(selectedInfoText)
 
-        val selectionRow = LinearLayout(this)
-        selectionRow.orientation = LinearLayout.HORIZONTAL
+        selectionBox.addView(selectionHeader)
 
-        val selectShown = Button(this)
-        selectShown.text = "Selecionar exibidos"
-        selectShown.setOnClickListener {
+        val selectionRow1 = LinearLayout(this)
+        selectionRow1.orientation = LinearLayout.HORIZONTAL
+        selectionRow1.setPadding(0, dp(10), 0, 0)
+
+        addWeightedChip(selectionRow1, chipButton("Exibidos", false) {
             files.forEach { selectedFiles.add(it.path) }
             Toast.makeText(this, "${files.size} arquivos exibidos selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
-        }
+        })
 
-        val clearSelection = Button(this)
-        clearSelection.text = "Limpar"
-        clearSelection.setOnClickListener {
-            selectedFiles.clear()
-            showCategory(categoryTitle, categoryDesc)
-        }
-
-        selectionRow.addView(selectShown, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        selectionRow.addView(clearSelection, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        selectionBox.addView(selectionRow)
-
-        val selectAllCategory = Button(this)
-        selectAllCategory.text = "Selecionar todos da categoria"
-        selectAllCategory.setOnClickListener {
+        addWeightedChip(selectionRow1, chipButton("Todos", false) {
             allCategoryItems.forEach { selectedFiles.add(it.path) }
             Toast.makeText(this, "${allCategoryItems.size} arquivos da categoria selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
-        }
-        selectionBox.addView(selectAllCategory)
+        })
 
-        val shareSelected = Button(this)
-        shareSelected.text = "Compartilhar selecionados"
-        shareSelected.setOnClickListener {
+        addWeightedChip(selectionRow1, chipButton("Limpar", false) {
+            selectedFiles.clear()
+            showCategory(categoryTitle, categoryDesc)
+        })
+
+        selectionBox.addView(selectionRow1)
+
+        val selectionRow2 = LinearLayout(this)
+        selectionRow2.orientation = LinearLayout.HORIZONTAL
+
+        addWeightedChip(selectionRow2, chipButton("Compartilhar", false) {
             shareSelectedFiles()
-        }
-        selectionBox.addView(shareSelected)
+        })
 
-        val deleteSelected = Button(this)
-        deleteSelected.text = "Excluir selecionados"
-        deleteSelected.setOnClickListener {
+        val deleteButton = chipButton("Excluir", false) {
             confirmDeleteSelectedFiles()
         }
-        selectionBox.addView(deleteSelected)
+        deleteButton.setTextColor(Color.rgb(150, 38, 38))
+        deleteButton.background = rounded(
+            Color.rgb(255, 245, 245),
+            Color.rgb(245, 190, 190),
+            dp(18)
+        )
+        addWeightedChip(selectionRow2, deleteButton)
+
+        selectionBox.addView(selectionRow2)
 
         root.addView(selectionBox)
         updateSelectedInfo()
