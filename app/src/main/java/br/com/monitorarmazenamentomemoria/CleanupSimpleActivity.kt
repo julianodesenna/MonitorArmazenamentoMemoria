@@ -13,6 +13,10 @@ import android.provider.MediaStore
 import android.content.ContentUris
 import android.content.ClipData
 import android.graphics.Color
+import android.widget.ImageView
+import android.media.MediaMetadataRetriever
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -40,6 +44,7 @@ class CleanupSimpleActivity : Activity() {
     private var orderMode = "size"
     private var allFiles: List<FileItem> = emptyList()
     private val selectedFiles = mutableSetOf<String>()
+    private val previewCache = mutableMapOf<String, Bitmap>()
     private var categoryDisplayLimit = 120
     private var yearFilter = "Todos"
     private var autoLoadMoreLocked = false
@@ -534,6 +539,171 @@ class CleanupSimpleActivity : Activity() {
         }
     }
 
+    private fun isPreviewImageFile(item: FileItem): Boolean {
+        val name = item.name.lowercase(Locale.ROOT)
+        val type = item.type.lowercase(Locale.ROOT)
+
+        return type.contains("imagem") ||
+            type.contains("foto") ||
+            name.endsWith(".jpg") ||
+            name.endsWith(".jpeg") ||
+            name.endsWith(".png") ||
+            name.endsWith(".webp")
+    }
+
+    private fun isPreviewVideoFile(item: FileItem): Boolean {
+        val name = item.name.lowercase(Locale.ROOT)
+        val type = item.type.lowercase(Locale.ROOT)
+
+        return type.contains("vídeo") ||
+            type.contains("video") ||
+            name.endsWith(".mp4") ||
+            name.endsWith(".mov") ||
+            name.endsWith(".mkv") ||
+            name.endsWith(".avi") ||
+            name.endsWith(".3gp")
+    }
+
+    private fun loadImagePreview(file: File): Bitmap? {
+        return try {
+            val bounds = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return null
+            }
+
+            var sample = 1
+            val target = dp(96)
+
+            while ((bounds.outWidth / sample) > target || (bounds.outHeight / sample) > target) {
+                sample *= 2
+            }
+
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+            }
+
+            BitmapFactory.decodeFile(file.absolutePath, opts)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun loadVideoPreview(file: File): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        } catch (_: Exception) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun loadPreviewBitmap(item: FileItem): Bitmap? {
+        val file = File(item.path)
+
+        if (!file.exists() || !file.isFile) {
+            return null
+        }
+
+        previewCache[item.path]?.let {
+            return it
+        }
+
+        val bmp = when {
+            isPreviewImageFile(item) -> loadImagePreview(file)
+            isPreviewVideoFile(item) -> loadVideoPreview(file)
+            else -> null
+        }
+
+        if (bmp != null) {
+            if (previewCache.size > 180) {
+                previewCache.clear()
+            }
+
+            previewCache[item.path] = bmp
+        }
+
+        return bmp
+    }
+
+    private fun fileFallbackIconView(item: FileItem): TextView {
+        return TextView(this).apply {
+            text = fileTypeIcon(item)
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.rgb(42, 92, 255))
+            background = rounded(
+                Color.rgb(238, 243, 255),
+                Color.rgb(205, 216, 245),
+                dp(12)
+            )
+        }
+    }
+
+    private fun filePreviewView(item: FileItem): FrameLayout {
+        val wrap = FrameLayout(this)
+        wrap.background = rounded(
+            Color.rgb(238, 243, 255),
+            Color.rgb(205, 216, 245),
+            dp(12)
+        )
+
+        val bmp = loadPreviewBitmap(item)
+
+        if (bmp != null) {
+            val img = ImageView(this)
+            img.scaleType = ImageView.ScaleType.CENTER_CROP
+            img.setImageBitmap(bmp)
+
+            wrap.addView(
+                img,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
+            if (isPreviewVideoFile(item)) {
+                val play = TextView(this)
+                play.text = "▶"
+                play.textSize = 13f
+                play.gravity = Gravity.CENTER
+                play.setTextColor(Color.WHITE)
+                play.background = rounded(
+                    Color.argb(155, 0, 0, 0),
+                    Color.argb(0, 0, 0, 0),
+                    dp(18)
+                )
+
+                val playParams = FrameLayout.LayoutParams(dp(24), dp(24))
+                playParams.gravity = Gravity.CENTER
+                wrap.addView(play, playParams)
+            }
+        } else {
+            wrap.addView(
+                fileFallbackIconView(item),
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+        }
+
+        return wrap
+    }
+
     private fun fileTypeIcon(item: FileItem): String {
         val name = item.name.lowercase(Locale.ROOT)
         val type = item.type.lowercase(Locale.ROOT)
@@ -599,20 +769,10 @@ class CleanupSimpleActivity : Activity() {
             true
         }
 
-        val fileIcon = TextView(this)
-        fileIcon.text = fileTypeIcon(item)
-        fileIcon.textSize = 15f
-        fileIcon.gravity = Gravity.CENTER
-        fileIcon.setTypeface(null, Typeface.BOLD)
-        fileIcon.setTextColor(Color.rgb(42, 92, 255))
-        fileIcon.background = rounded(
-            Color.rgb(238, 243, 255),
-            Color.rgb(205, 216, 245),
-            dp(12)
-        )
+        val fileIcon = filePreviewView(item)
         fileIcon.setOnClickListener { openThisFile() }
 
-        val iconParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        val iconParams = LinearLayout.LayoutParams(dp(48), dp(48))
         iconParams.setMargins(0, 0, dp(10), 0)
         titleRow.addView(fileIcon, iconParams)
 
