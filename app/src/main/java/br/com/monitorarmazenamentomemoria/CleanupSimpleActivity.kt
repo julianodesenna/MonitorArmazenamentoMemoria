@@ -1123,16 +1123,17 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun setupAutoLoadMore(totalItems: Int, shownItems: Int, categoryTitle: String, categoryDesc: String) {
-        if (!::scroll.isInitialized) return
         if (shownItems >= totalItems) return
 
-        scroll.viewTreeObserver.addOnScrollChangedListener {
+        val activeScroll = root.parent as? ScrollView ?: return
+
+        activeScroll.viewTreeObserver.addOnScrollChangedListener {
             if (autoLoadMoreLocked) return@addOnScrollChangedListener
             if (currentCategory != categoryTitle) return@addOnScrollChangedListener
             if (categoryDisplayLimit >= totalItems) return@addOnScrollChangedListener
 
-            val child = scroll.getChildAt(scroll.childCount - 1) ?: return@addOnScrollChangedListener
-            val distanceToBottom = child.bottom - (scroll.height + scroll.scrollY)
+            val child = activeScroll.getChildAt(activeScroll.childCount - 1) ?: return@addOnScrollChangedListener
+            val distanceToBottom = child.bottom - (activeScroll.height + activeScroll.scrollY)
 
             if (distanceToBottom <= dp(900)) {
                 autoLoadMoreLocked = true
@@ -1140,7 +1141,7 @@ class CleanupSimpleActivity : Activity() {
 
                 Toast.makeText(this, "Carregando mais arquivos...", Toast.LENGTH_SHORT).show()
 
-                scroll.postDelayed({
+                activeScroll.postDelayed({
                     autoLoadMoreLocked = false
                     showCategory(categoryTitle, categoryDesc)
                 }, 120)
