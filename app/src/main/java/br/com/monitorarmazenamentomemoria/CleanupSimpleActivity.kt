@@ -111,6 +111,7 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun drawHome() {
+        removeFloatingListNav()
         currentCategory = ""
         categoryDisplayLimit = 120
         yearFilter = "Todos"
@@ -267,6 +268,7 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun showCategory(categoryTitle: String, categoryDesc: String) {
+        removeFloatingListNav()
         if (currentCategory != categoryTitle) {
             categoryDisplayLimit = 120
             yearFilter = "Todos"
@@ -655,13 +657,98 @@ class CleanupSimpleActivity : Activity() {
             return
         }
 
-        addListShortcutRow("Navegação da lista")
+        showFloatingListNav()
 
         for (file in files) {
             root.addView(fileRow(file))
         }
+    }
 
-        addListShortcutRow("Fim da lista")
+    private fun removeFloatingListNav() {
+        val decor = window.decorView as? android.view.ViewGroup ?: return
+        val old = decor.findViewWithTag<android.view.View>("cleanup_floating_list_nav")
+        val parent = old?.parent as? android.view.ViewGroup
+        parent?.removeView(old)
+    }
+
+    private fun showFloatingListNav() {
+        removeFloatingListNav()
+
+        val nav = LinearLayout(this)
+        nav.tag = "cleanup_floating_list_nav"
+        nav.orientation = LinearLayout.VERTICAL
+        nav.setPadding(dp(8), dp(8), dp(8), dp(8))
+        nav.background = rounded(
+            Color.argb(248, 255, 255, 255),
+            Color.rgb(218, 225, 236),
+            dp(22)
+        )
+        nav.elevation = dp(10).toFloat()
+
+        fun scrollToTop() {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, 0)
+            }
+        }
+
+        fun scrollToBottom() {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, root.height)
+            }
+        }
+
+        fun floatingButton(label: String, onClick: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = label
+                textSize = 12f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setPadding(dp(10), 0, dp(10), 0)
+                setTextColor(Color.rgb(35, 45, 65))
+                background = rounded(
+                    Color.rgb(248, 250, 253),
+                    Color.rgb(205, 214, 230),
+                    dp(16)
+                )
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+        }
+
+        val topButton = floatingButton("↑ Topo") {
+            scrollToTop()
+        }
+
+        val bottomButton = floatingButton("↓ Final") {
+            scrollToBottom()
+        }
+
+        val topParams = LinearLayout.LayoutParams(
+            dp(86),
+            dp(34)
+        )
+        topParams.setMargins(0, 0, 0, dp(6))
+
+        val bottomParams = LinearLayout.LayoutParams(
+            dp(86),
+            dp(34)
+        )
+
+        nav.addView(topButton, topParams)
+        nav.addView(bottomButton, bottomParams)
+
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.END or Gravity.BOTTOM
+        )
+        params.setMargins(0, 0, dp(12), dp(88))
+
+        addContentView(nav, params)
     }
 
     private fun filterButton(label: String, mb: Int): Button {
