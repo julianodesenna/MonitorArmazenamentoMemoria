@@ -193,15 +193,15 @@ class CleanupSimpleActivity : Activity() {
         categoriesTitle.setPadding(0, dp(8), 0, dp(10))
         root.addView(categoriesTitle)
 
+        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Recentes", "Arquivos modificados recentemente")
         addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
         addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
         addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
         addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
         addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
         addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
-        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Recentes", "Arquivos modificados recentemente")
-        addCategoryRow("◷", "Recentes", "Arquivos modificados recentemente", "⚠", "Sensíveis", "Arquivos que exigem cuidado")
-        addCategoryRow("↓", "Downloads", "Arquivos baixados", "◇", "APKs", "Instaladores antigos")
+        addCategoryRow("⚠", "Sensíveis", "Arquivos que exigem cuidado", "↓", "Downloads", "Arquivos baixados")
+        addCategorySingleRow("◇", "APKs", "Instaladores antigos")
     }
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
@@ -210,6 +210,23 @@ class CleanupSimpleActivity : Activity() {
         row.addView(categoryCard(icon1, title1, desc1), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(categoryCard(icon2, title2, desc2), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(row)
+    }
+
+    private fun addCategorySingleRow(icon: String, title: String, desc: String) {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+
+        row.addView(
+            categoryCard(icon, title, desc),
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
+
+        row.addView(
+            android.view.View(this),
+            LinearLayout.LayoutParams(0, 1, 1f)
+        )
+
+        categories.addView(row)
     }
 
     private fun categoryCard(icon: String, title: String, desc: String): LinearLayout {
