@@ -1245,27 +1245,36 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun setupAutoLoadMore(totalItems: Int, shownItems: Int, categoryTitle: String, categoryDesc: String) {
-        if (shownItems >= totalItems) return
-
         val activeScroll = root.parent as? ScrollView ?: return
 
-        activeScroll.viewTreeObserver.addOnScrollChangedListener {
-            if (autoLoadMoreLocked) return@addOnScrollChangedListener
-            if (currentCategory != categoryTitle) return@addOnScrollChangedListener
-            if (categoryDisplayLimit >= totalItems) return@addOnScrollChangedListener
+        activeScroll.setOnScrollChangeListener(null)
+        autoLoadMoreLocked = false
 
-            val child = activeScroll.getChildAt(activeScroll.childCount - 1) ?: return@addOnScrollChangedListener
+        if (totalItems <= 0) {
+            return
+        }
+
+        if (shownItems >= totalItems) {
+            return
+        }
+
+        activeScroll.setOnScrollChangeListener { _, _, _, _, _ ->
+            if (autoLoadMoreLocked) return@setOnScrollChangeListener
+            if (currentCategory != categoryTitle) return@setOnScrollChangeListener
+            if (categoryDisplayLimit >= totalItems) return@setOnScrollChangeListener
+
+            val child = activeScroll.getChildAt(activeScroll.childCount - 1) ?: return@setOnScrollChangeListener
             val distanceToBottom = child.bottom - (activeScroll.height + activeScroll.scrollY)
 
             if (distanceToBottom <= dp(900)) {
                 autoLoadMoreLocked = true
                 categoryDisplayLimit = minOf(categoryDisplayLimit + 200, totalItems)
 
-                Toast.makeText(this, "Carregando mais arquivos...", Toast.LENGTH_SHORT).show()
-
                 activeScroll.postDelayed({
                     autoLoadMoreLocked = false
-                    showCategory(categoryTitle, categoryDesc)
+                    if (currentCategory == categoryTitle) {
+                        showCategory(categoryTitle, categoryDesc)
+                    }
                 }, 120)
             }
         }
