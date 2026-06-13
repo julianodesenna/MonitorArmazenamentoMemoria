@@ -1062,6 +1062,20 @@ class CleanupSimpleActivity : Activity() {
         }
     }
 
+    private fun compactDisplayPath(path: String): String {
+        val parts = path.split("/").filter { it.isNotBlank() }
+
+        if (parts.size <= 4) {
+            return path
+        }
+
+        val fileName = parts.lastOrNull().orEmpty()
+        val parent = parts.dropLast(1).lastOrNull().orEmpty()
+        val grandParent = parts.dropLast(2).lastOrNull().orEmpty()
+
+        return "…/$grandParent/$parent/$fileName"
+    }
+
     private fun fileRow(item: FileItem): LinearLayout {
         val box = card()
 
@@ -1104,6 +1118,7 @@ class CleanupSimpleActivity : Activity() {
         name.setTypeface(null, Typeface.BOLD)
         name.setTextColor(Color.rgb(14, 26, 56))
         name.maxLines = 2
+        name.ellipsize = android.text.TextUtils.TruncateAt.END
         name.setOnClickListener { openThisFile() }
         name.setOnLongClickListener {
             showFileDetails()
@@ -1113,7 +1128,7 @@ class CleanupSimpleActivity : Activity() {
         val fileIcon = filePreviewView(item)
         fileIcon.setOnClickListener { openThisFile() }
 
-        val iconParams = LinearLayout.LayoutParams(dp(52), dp(52))
+        val iconParams = LinearLayout.LayoutParams(dp(48), dp(48))
         iconParams.setMargins(0, 0, dp(10), 0)
         titleRow.addView(fileIcon, iconParams)
 
@@ -1126,7 +1141,7 @@ class CleanupSimpleActivity : Activity() {
 
         val selectTouchArea = FrameLayout(this)
         selectTouchArea.setPadding(dp(4), dp(4), dp(4), dp(4))
-        selectTouchArea.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+        selectTouchArea.layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
 
         val selectBadge = TextView(this)
         selectBadge.gravity = Gravity.CENTER
@@ -1146,7 +1161,7 @@ class CleanupSimpleActivity : Activity() {
 
         refreshSelectBadge()
 
-        val badgeParams = FrameLayout.LayoutParams(dp(30), dp(30))
+        val badgeParams = FrameLayout.LayoutParams(dp(28), dp(28))
         badgeParams.gravity = Gravity.CENTER
         selectTouchArea.addView(selectBadge, badgeParams)
 
@@ -1177,7 +1192,7 @@ class CleanupSimpleActivity : Activity() {
         box.addView(detail)
 
         val pathView = TextView(this)
-        pathView.text = "Local: ${item.path}"
+        pathView.text = "Local: ${compactDisplayPath(item.path)}"
         pathView.textSize = 11f
         pathView.setTextColor(Color.rgb(110, 120, 140))
         pathView.maxLines = 3
@@ -1190,7 +1205,7 @@ class CleanupSimpleActivity : Activity() {
         box.addView(pathView)
 
         val hint = TextView(this)
-        hint.text = "Toque para abrir • segure para detalhes"
+        hint.text = "Abrir • detalhes"
         hint.textSize = 11f
         hint.setTextColor(Color.rgb(42, 92, 255))
         hint.setPadding(0, dp(2), 0, 0)
