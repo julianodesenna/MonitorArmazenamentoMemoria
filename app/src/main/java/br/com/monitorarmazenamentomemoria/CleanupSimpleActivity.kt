@@ -226,7 +226,7 @@ class CleanupSimpleActivity : Activity() {
             LinearLayout.LayoutParams(0, 1, 1f)
         )
 
-        categories.addView(row)
+        root.addView(row)
     }
 
     private fun categoryCard(icon: String, title: String, desc: String): LinearLayout {
