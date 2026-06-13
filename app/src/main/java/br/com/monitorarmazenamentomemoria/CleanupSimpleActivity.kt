@@ -40,6 +40,7 @@ class CleanupSimpleActivity : Activity() {
     private var orderMode = "size"
     private var allFiles: List<FileItem> = emptyList()
     private val selectedFiles = mutableSetOf<String>()
+    private var categoryDisplayLimit = 120
     private lateinit var selectedInfoText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +102,7 @@ class CleanupSimpleActivity : Activity() {
 
     private fun drawHome() {
         currentCategory = ""
+        categoryDisplayLimit = 120
         root.removeAllViews()
 
         val data = Monitor.read(this)
@@ -234,12 +236,18 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun showCategory(categoryTitle: String, categoryDesc: String) {
+        if (currentCategory != categoryTitle) {
+            categoryDisplayLimit = 120
+        }
         currentCategory = categoryTitle
         root.removeAllViews()
 
         val back = Button(this)
         back.text = "← Voltar para categorias"
-        back.setOnClickListener { drawHome() }
+        back.setOnClickListener {
+            categoryDisplayLimit = 120
+            drawHome()
+        }
         root.addView(back)
 
         val title = TextView(this)
@@ -276,26 +284,35 @@ class CleanupSimpleActivity : Activity() {
         orderRow.orientation = LinearLayout.HORIZONTAL
 
         val maior = Button(this)
-        maior.text = if (orderMode == "size") "✓ Maior primeiro" else "Maior primeiro"
+        maior.text = if (orderMode == "size") "✓ Maiores" else "Maiores"
         maior.setOnClickListener {
             orderMode = "size"
             showCategory(categoryTitle, categoryDesc)
         }
 
         val recente = Button(this)
-        recente.text = if (orderMode == "date") "✓ Mais recente" else "Mais recente"
+        recente.text = if (orderMode == "date") "✓ Recentes" else "Recentes"
         recente.setOnClickListener {
             orderMode = "date"
             showCategory(categoryTitle, categoryDesc)
         }
 
+        val antigo = Button(this)
+        antigo.text = if (orderMode == "old") "✓ Antigos" else "Antigos"
+        antigo.setOnClickListener {
+            orderMode = "old"
+            showCategory(categoryTitle, categoryDesc)
+        }
+
         orderRow.addView(maior, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         orderRow.addView(recente, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        orderRow.addView(antigo, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         filter.addView(orderRow)
 
         root.addView(filter)
 
-        val files = ordered(categoryFiles(categoryTitle)).take(80)
+        val allCategoryItems = ordered(categoryFiles(categoryTitle))
+        val files = allCategoryItems.take(categoryDisplayLimit)
 
         val selectionBox = card()
         selectionBox.addView(titleText("Seleção"))
@@ -313,6 +330,7 @@ class CleanupSimpleActivity : Activity() {
         selectShown.text = "Selecionar exibidos"
         selectShown.setOnClickListener {
             files.forEach { selectedFiles.add(it.path) }
+            Toast.makeText(this, "${files.size} arquivos exibidos selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
         }
 
@@ -326,6 +344,15 @@ class CleanupSimpleActivity : Activity() {
         selectionRow.addView(selectShown, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         selectionRow.addView(clearSelection, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         selectionBox.addView(selectionRow)
+
+        val selectAllCategory = Button(this)
+        selectAllCategory.text = "Selecionar todos da categoria"
+        selectAllCategory.setOnClickListener {
+            allCategoryItems.forEach { selectedFiles.add(it.path) }
+            Toast.makeText(this, "${allCategoryItems.size} arquivos da categoria selecionados", Toast.LENGTH_SHORT).show()
+            showCategory(categoryTitle, categoryDesc)
+        }
+        selectionBox.addView(selectAllCategory)
 
         val shareSelected = Button(this)
         shareSelected.text = "Compartilhar selecionados"
@@ -345,11 +372,22 @@ class CleanupSimpleActivity : Activity() {
         updateSelectedInfo()
 
         val summary = TextView(this)
-        summary.text = "${files.size} arquivos mostrados • ${formatSize(files.sumOf { it.size })}"
+        summary.text = "${files.size} de ${allCategoryItems.size} arquivos mostrados • exibidos: ${formatSize(files.sumOf { it.size })} • total: ${formatSize(allCategoryItems.sumOf { it.size })}"
         summary.textSize = 14f
         summary.setTextColor(Color.rgb(80, 90, 110))
         summary.setPadding(0, dp(4), 0, dp(12))
         root.addView(summary)
+
+        if (files.size < allCategoryItems.size) {
+            val loadMore = Button(this)
+            val remaining = allCategoryItems.size - files.size
+            loadMore.text = "Carregar mais ${minOf(200, remaining)} arquivos"
+            loadMore.setOnClickListener {
+                categoryDisplayLimit += 200
+                showCategory(categoryTitle, categoryDesc)
+            }
+            root.addView(loadMore)
+        }
 
         if (files.isEmpty()) {
             val empty = card()
@@ -401,7 +439,10 @@ class CleanupSimpleActivity : Activity() {
         }
 
         fun openThisFile() {
-            openFile(item)
+            Toast.makeText(this, "Abrindo arquivo...", Toast.LENGTH_SHORT).show()
+            window.decorView.post {
+                openFile(item)
+            }
         }
 
         val titleRow = LinearLayout(this)
@@ -521,8 +562,10 @@ class CleanupSimpleActivity : Activity() {
 
 
     private fun updateSelectedInfo() {
-        // Atualização simples e segura para evitar quebra de compilação.
-        // A interface principal continua funcionando mesmo sem contador visual dedicado.
+        if (::selectedInfoText.isInitialized) {
+            val selected = allFiles.filter { selectedFiles.contains(it.path) }
+            selectedInfoText.text = "${selected.size} selecionados • ${formatSize(selected.sumOf { it.size })}"
+        }
     }
 
     private fun shareSelectedFiles() {
@@ -1086,8 +1129,11 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun ordered(files: List<FileItem>): List<FileItem> {
-        return if (orderMode == "date") files.sortedByDescending { it.modified }
-        else files.sortedByDescending { it.size }
+        return when (orderMode) {
+            "date" -> files.sortedByDescending { it.modified }
+            "old" -> files.sortedBy { it.modified }
+            else -> files.sortedByDescending { it.size }
+        }
     }
 
     private fun fileCategory(file: File): String {
