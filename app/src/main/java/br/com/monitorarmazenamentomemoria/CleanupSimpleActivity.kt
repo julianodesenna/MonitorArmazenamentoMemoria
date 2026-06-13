@@ -383,55 +383,64 @@ class CleanupSimpleActivity : Activity() {
     private fun fileRow(item: FileItem): LinearLayout {
         val box = card()
 
+        val titleRow = LinearLayout(this)
+        titleRow.orientation = LinearLayout.HORIZONTAL
+        titleRow.gravity = Gravity.CENTER_VERTICAL
+
         val name = TextView(this)
         name.text = if (item.risk == "alto") "⚠ ${item.name}" else item.name
         name.textSize = 16f
         name.setTypeface(null, Typeface.BOLD)
         name.setTextColor(Color.rgb(14, 26, 56))
-        box.addView(name)
+        name.maxLines = 2
 
-        val detail = TextView(this)
-        detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
-        detail.textSize = 11f
-        detail.setTextColor(Color.rgb(80, 90, 110))
-        detail.setPadding(0, dp(4), 0, dp(4))
-        box.addView(detail)
+        val nameParams = LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1f
+        )
+        titleRow.addView(name, nameParams)
 
-        val path = TextView(this)
-        path.text = item.path
-        path.textSize = 11f
-        path.setTextColor(Color.rgb(110, 120, 140))
-        box.addView(path)
+        val selectTouchArea = FrameLayout(this)
+        selectTouchArea.setPadding(dp(5), dp(5), dp(5), dp(5))
+        selectTouchArea.layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
 
-        val selectTouchArea = LinearLayout(this)
-        selectTouchArea.orientation = LinearLayout.HORIZONTAL
-        selectTouchArea.gravity = Gravity.CENTER
-        selectTouchArea.setPadding(dp(4), dp(4), dp(4), dp(4))
-        selectTouchArea.minimumWidth = dp(52)
-        selectTouchArea.minimumHeight = dp(44)
+        val selectBadge = TextView(this)
+        selectBadge.gravity = Gravity.CENTER
+        selectBadge.textSize = 18f
+        selectBadge.setTypeface(null, Typeface.BOLD)
 
-        val check = CheckBox(this)
-        check.text = ""
-        check.isClickable = false
-        check.isFocusable = false
-        check.isChecked = selectedFiles.contains(item.path)
+        fun refreshSelectBadge() {
+            val selected = selectedFiles.contains(item.path)
+            selectBadge.text = if (selected) "✓" else ""
+            selectBadge.setTextColor(if (selected) Color.WHITE else Color.rgb(80, 90, 110))
+            selectBadge.background = rounded(
+                if (selected) Color.rgb(42, 92, 255) else Color.WHITE,
+                if (selected) Color.rgb(42, 92, 255) else Color.rgb(135, 148, 170),
+                dp(8)
+            )
+        }
 
-        val checkParams = LinearLayout.LayoutParams(dp(38), dp(38))
-        selectTouchArea.addView(check, checkParams)
+        refreshSelectBadge()
+
+        val badgeParams = FrameLayout.LayoutParams(dp(30), dp(30))
+        badgeParams.gravity = Gravity.CENTER
+        selectTouchArea.addView(selectBadge, badgeParams)
 
         selectTouchArea.setOnClickListener {
             val selected = selectedFiles.contains(item.path)
             if (selected) {
                 selectedFiles.remove(item.path)
-                check.isChecked = false
             } else {
                 selectedFiles.add(item.path)
-                check.isChecked = true
             }
+            refreshSelectBadge()
             updateSelectedInfo()
         }
 
-        box.addView(selectTouchArea)
+        titleRow.addView(selectTouchArea)
+        box.addView(titleRow)
+
 
         box.setOnClickListener {
             AlertDialog.Builder(this)
