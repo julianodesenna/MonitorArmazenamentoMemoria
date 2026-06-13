@@ -744,9 +744,11 @@ class CleanupSimpleActivity : Activity() {
         val params = android.widget.FrameLayout.LayoutParams(
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.END or Gravity.BOTTOM
+            Gravity.END or Gravity.CENTER_VERTICAL
         )
-        params.setMargins(0, 0, dp(12), dp(88))
+        params.setMargins(0, 0, dp(10), 0)
+
+        nav.translationY = dp(120).toFloat()
 
         addContentView(nav, params)
     }
