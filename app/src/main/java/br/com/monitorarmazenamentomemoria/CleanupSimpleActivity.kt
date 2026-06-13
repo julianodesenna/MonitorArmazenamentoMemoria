@@ -46,6 +46,8 @@ class CleanupSimpleActivity : Activity() {
     private var allFiles: List<FileItem> = emptyList()
     private val selectedFiles = mutableSetOf<String>()
     private val previewCache = mutableMapOf<String, Bitmap>()
+    private val previewExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
+    private val previewMainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var categoryDisplayLimit = 120
     private var yearFilter = "Todos"
     private var autoLoadMoreLocked = false
@@ -639,7 +641,7 @@ class CleanupSimpleActivity : Activity() {
         }
 
         if (bmp != null) {
-            if (previewCache.size > 160) {
+            if (previewCache.size > 80) {
                 previewCache.clear()
             }
 
@@ -672,18 +674,18 @@ class CleanupSimpleActivity : Activity() {
             dp(12)
         )
 
-        val fallback = fileFallbackIconView(item)
-        wrap.addView(
-            fallback,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+        fun showFallback() {
+            wrap.removeAllViews()
+            wrap.addView(
+                fileFallbackIconView(item),
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
             )
-        )
+        }
 
-        val bmp = loadPreviewBitmap(item)
-
-        if (bmp != null) {
+        fun showBitmap(bmp: Bitmap) {
             wrap.removeAllViews()
 
             val img = ImageView(this)
@@ -713,6 +715,28 @@ class CleanupSimpleActivity : Activity() {
                 val playParams = FrameLayout.LayoutParams(dp(24), dp(24))
                 playParams.gravity = Gravity.CENTER
                 wrap.addView(play, playParams)
+            }
+        }
+
+        showFallback()
+
+        val cached = previewCache[item.path]
+        if (cached != null) {
+            showBitmap(cached)
+            return wrap
+        }
+
+        if (isPreviewImageFile(item) || isPreviewVideoFile(item)) {
+            val expectedPath = item.path
+
+            previewExecutor.execute {
+                val bmp = loadPreviewBitmap(item)
+
+                previewMainHandler.post {
+                    if (item.path == expectedPath && bmp != null) {
+                        showBitmap(bmp)
+                    }
+                }
             }
         }
 
