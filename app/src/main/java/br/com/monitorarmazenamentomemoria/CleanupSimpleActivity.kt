@@ -1103,6 +1103,27 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
+        fun openActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = label
+                textSize = 13f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setPadding(dp(12), 0, dp(12), 0)
+                setTextColor(if (primary) Color.WHITE else Color.rgb(35, 45, 65))
+                background = rounded(
+                    if (primary) Color.rgb(42, 92, 255) else Color.rgb(248, 250, 253),
+                    if (primary) Color.rgb(42, 92, 255) else Color.rgb(205, 214, 230),
+                    dp(18)
+                )
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+        }
+
+
         val titleRow = LinearLayout(this)
         titleRow.orientation = LinearLayout.HORIZONTAL
         titleRow.gravity = Gravity.CENTER_VERTICAL
@@ -1204,17 +1225,35 @@ class CleanupSimpleActivity : Activity() {
         }
         box.addView(pathView)
 
-        val hint = TextView(this)
-        hint.text = "Abrir • detalhes"
-        hint.textSize = 11f
-        hint.setTextColor(Color.rgb(42, 92, 255))
-        hint.setPadding(0, dp(2), 0, 0)
-        hint.setOnClickListener { openThisFile() }
-        hint.setOnLongClickListener {
-            showFileDetails()
-            true
+        val actionRow = LinearLayout(this)
+        actionRow.orientation = LinearLayout.HORIZONTAL
+        actionRow.setPadding(0, dp(10), 0, 0)
+
+        val openButton = openActionButton("Abrir arquivo", true) {
+            openThisFile()
         }
-        box.addView(hint)
+
+        val detailsButton = openActionButton("Detalhes", false) {
+            showFileDetails()
+        }
+
+        val openParams = LinearLayout.LayoutParams(
+            0,
+            dp(38),
+            1f
+        )
+        openParams.setMargins(0, 0, dp(6), 0)
+
+        val detailsParams = LinearLayout.LayoutParams(
+            0,
+            dp(38),
+            1f
+        )
+        detailsParams.setMargins(dp(6), 0, 0, 0)
+
+        actionRow.addView(openButton, openParams)
+        actionRow.addView(detailsButton, detailsParams)
+        box.addView(actionRow)
 
         box.setOnClickListener { openThisFile() }
         box.setOnLongClickListener {
