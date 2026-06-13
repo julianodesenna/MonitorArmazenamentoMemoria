@@ -405,9 +405,10 @@ class CleanupSimpleActivity : Activity() {
 
         val selectTouchArea = LinearLayout(this)
         selectTouchArea.orientation = LinearLayout.HORIZONTAL
-        selectTouchArea.gravity = Gravity.CENTER_VERTICAL
-        selectTouchArea.setPadding(dp(6), dp(8), dp(6), dp(8))
-        selectTouchArea.minimumHeight = dp(48)
+        selectTouchArea.gravity = Gravity.CENTER
+        selectTouchArea.setPadding(dp(4), dp(4), dp(4), dp(4))
+        selectTouchArea.minimumWidth = dp(52)
+        selectTouchArea.minimumHeight = dp(44)
 
         val check = CheckBox(this)
         check.text = ""
@@ -415,15 +416,8 @@ class CleanupSimpleActivity : Activity() {
         check.isFocusable = false
         check.isChecked = selectedFiles.contains(item.path)
 
-        val checkParams = LinearLayout.LayoutParams(dp(42), dp(42))
+        val checkParams = LinearLayout.LayoutParams(dp(38), dp(38))
         selectTouchArea.addView(check, checkParams)
-
-        val selectLabel = TextView(this)
-        selectLabel.text = "Selecionar"
-        selectLabel.textSize = 13f
-        selectLabel.setTextColor(Color.rgb(70, 82, 105))
-        selectLabel.setPadding(dp(2), 0, 0, 0)
-        selectTouchArea.addView(selectLabel)
 
         selectTouchArea.setOnClickListener {
             val selected = selectedFiles.contains(item.path)
