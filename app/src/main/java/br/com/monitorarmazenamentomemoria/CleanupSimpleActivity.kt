@@ -402,8 +402,8 @@ class CleanupSimpleActivity : Activity() {
         titleRow.addView(name, nameParams)
 
         val selectTouchArea = FrameLayout(this)
-        selectTouchArea.setPadding(dp(5), dp(5), dp(5), dp(5))
-        selectTouchArea.layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+        selectTouchArea.setPadding(dp(4), dp(4), dp(4), dp(4))
+        selectTouchArea.layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
 
         val selectBadge = TextView(this)
         selectBadge.gravity = Gravity.CENTER
@@ -441,6 +441,27 @@ class CleanupSimpleActivity : Activity() {
         titleRow.addView(selectTouchArea)
         box.addView(titleRow)
 
+        val detail = TextView(this)
+        detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
+        detail.textSize = 12f
+        detail.setTextColor(Color.rgb(80, 90, 110))
+        detail.setPadding(0, dp(6), 0, dp(4))
+        box.addView(detail)
+
+        val pathView = TextView(this)
+        pathView.text = "Local: ${item.path}"
+        pathView.textSize = 11f
+        pathView.setTextColor(Color.rgb(110, 120, 140))
+        pathView.maxLines = 3
+        pathView.setPadding(0, 0, 0, dp(6))
+        box.addView(pathView)
+
+        val hint = TextView(this)
+        hint.text = "Toque no card para abrir ou ver detalhes"
+        hint.textSize = 11f
+        hint.setTextColor(Color.rgb(42, 92, 255))
+        hint.setPadding(0, dp(2), 0, 0)
+        box.addView(hint)
 
         box.setOnClickListener {
             AlertDialog.Builder(this)
