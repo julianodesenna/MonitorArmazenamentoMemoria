@@ -563,7 +563,7 @@ class CleanupSimpleActivity : Activity() {
         }
 
         val selectionBox = card()
-        selectionBox.setPadding(dp(14), dp(14), dp(14), dp(10))
+        selectionBox.setPadding(dp(14), dp(12), dp(14), dp(10))
 
         val selectionHeader = LinearLayout(this)
         selectionHeader.orientation = LinearLayout.HORIZONTAL
@@ -571,7 +571,7 @@ class CleanupSimpleActivity : Activity() {
 
         val selectionTitle = TextView(this)
         selectionTitle.text = "Seleção"
-        selectionTitle.textSize = 18f
+        selectionTitle.textSize = 16f
         selectionTitle.setTypeface(null, Typeface.BOLD)
         selectionTitle.setTextColor(Color.rgb(14, 26, 56))
         selectionHeader.addView(
@@ -580,40 +580,37 @@ class CleanupSimpleActivity : Activity() {
         )
 
         selectedInfoText = TextView(this)
-        selectedInfoText.textSize = 11f
+        selectedInfoText.textSize = 12f
+        selectedInfoText.setTypeface(null, Typeface.BOLD)
         selectedInfoText.setTextColor(Color.rgb(80, 90, 110))
         selectedInfoText.gravity = Gravity.END
         selectionHeader.addView(selectedInfoText)
 
         selectionBox.addView(selectionHeader)
 
-        val selectionRow1 = LinearLayout(this)
-        selectionRow1.orientation = LinearLayout.HORIZONTAL
-        selectionRow1.setPadding(0, dp(10), 0, 0)
+        val selectRow = LinearLayout(this)
+        selectRow.orientation = LinearLayout.HORIZONTAL
+        selectRow.setPadding(0, dp(10), 0, 0)
 
-        addWeightedChip(selectionRow1, chipButton("Exibidos", false) {
+        addWeightedChip(selectRow, chipButton("Exibidos", false) {
             files.forEach { selectedFiles.add(it.path) }
             Toast.makeText(this, "${files.size} arquivos exibidos selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
         })
 
-        addWeightedChip(selectionRow1, chipButton("Todos", false) {
+        addWeightedChip(selectRow, chipButton("Todos", false) {
             allCategoryItems.forEach { selectedFiles.add(it.path) }
             Toast.makeText(this, "${allCategoryItems.size} arquivos da categoria selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
         })
 
-        addWeightedChip(selectionRow1, chipButton("Limpar", false) {
-            selectedFiles.clear()
-            showCategory(categoryTitle, categoryDesc)
-        })
+        selectionBox.addView(selectRow)
 
-        selectionBox.addView(selectionRow1)
+        val actionRow = LinearLayout(this)
+        actionRow.orientation = LinearLayout.HORIZONTAL
+        actionRow.setPadding(0, dp(4), 0, 0)
 
-        val selectionRow2 = LinearLayout(this)
-        selectionRow2.orientation = LinearLayout.HORIZONTAL
-
-        addWeightedChip(selectionRow2, chipButton("Compartilhar", false) {
+        addWeightedChip(actionRow, chipButton("Compartilhar", false) {
             shareSelectedFiles()
         })
 
@@ -626,9 +623,24 @@ class CleanupSimpleActivity : Activity() {
             Color.rgb(245, 190, 190),
             dp(18)
         )
-        addWeightedChip(selectionRow2, deleteButton)
+        addWeightedChip(actionRow, deleteButton)
 
-        selectionBox.addView(selectionRow2)
+        val showClearSelection = selectedFiles.isNotEmpty()
+        if (showClearSelection) {
+            val clearButton = chipButton("Limpar", false) {
+                selectedFiles.clear()
+                showCategory(categoryTitle, categoryDesc)
+            }
+            clearButton.setTextColor(Color.rgb(80, 90, 110))
+            clearButton.background = rounded(
+                Color.rgb(248, 250, 253),
+                Color.rgb(218, 225, 236),
+                dp(18)
+            )
+            addWeightedChip(actionRow, clearButton)
+        }
+
+        selectionBox.addView(actionRow)
 
         root.addView(selectionBox)
         updateSelectedInfo()
