@@ -476,6 +476,90 @@ class CleanupSimpleActivity : Activity() {
         val allCategoryItems = ordered(filterByYear(rawCategoryItems))
         val files = allCategoryItems.take(categoryDisplayLimit)
 
+        fun scrollToCategoryTop() {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, 0)
+            }
+        }
+
+        fun scrollToCategoryBottom() {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, root.height)
+            }
+        }
+
+        fun listShortcutButton(label: String, onClick: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = label
+                textSize = 12f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setPadding(dp(10), 0, dp(10), 0)
+                setTextColor(Color.rgb(35, 45, 65))
+                background = rounded(
+                    Color.rgb(248, 250, 253),
+                    Color.rgb(218, 225, 236),
+                    dp(16)
+                )
+                elevation = dp(1).toFloat()
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+        }
+
+        fun addListShortcutRow(label: String) {
+            val box = card()
+            box.setPadding(dp(12), dp(10), dp(12), dp(10))
+
+            val title = TextView(this)
+            title.text = label
+            title.textSize = 12f
+            title.setTypeface(null, Typeface.BOLD)
+            title.setTextColor(Color.rgb(80, 90, 110))
+            title.setPadding(0, 0, 0, dp(8))
+            box.addView(title)
+
+            val row = LinearLayout(this)
+            row.orientation = LinearLayout.HORIZONTAL
+
+            val topButton = listShortcutButton("↑ Topo") {
+                scrollToCategoryTop()
+            }
+
+            val bottomButton = listShortcutButton("↓ Final") {
+                scrollToCategoryBottom()
+            }
+
+            val topParams = LinearLayout.LayoutParams(
+                0,
+                dp(34),
+                1f
+            )
+            topParams.setMargins(0, 0, dp(6), 0)
+
+            val bottomParams = LinearLayout.LayoutParams(
+                0,
+                dp(34),
+                1f
+            )
+            bottomParams.setMargins(dp(6), 0, 0, 0)
+
+            row.addView(topButton, topParams)
+            row.addView(bottomButton, bottomParams)
+            box.addView(row)
+
+            val boxParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            boxParams.setMargins(0, dp(8), 0, dp(10))
+            root.addView(box, boxParams)
+        }
+
         val selectionBox = card()
         selectionBox.setPadding(dp(14), dp(14), dp(14), dp(10))
 
@@ -571,9 +655,13 @@ class CleanupSimpleActivity : Activity() {
             return
         }
 
+        addListShortcutRow("Navegação da lista")
+
         for (file in files) {
             root.addView(fileRow(file))
         }
+
+        addListShortcutRow("Fim da lista")
     }
 
     private fun filterButton(label: String, mb: Int): Button {
