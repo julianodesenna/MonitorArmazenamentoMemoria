@@ -741,16 +741,96 @@ class CleanupSimpleActivity : Activity() {
         nav.addView(topButton, topParams)
         nav.addView(bottomButton, bottomParams)
 
+        val prefs = getSharedPreferences("cleanup_ui", MODE_PRIVATE)
+
+        fun clampPosition(value: Int, min: Int, max: Int): Int {
+            val safeMax = maxOf(min, max)
+            return value.coerceIn(min, safeMax)
+        }
+
         val params = android.widget.FrameLayout.LayoutParams(
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.END or Gravity.CENTER_VERTICAL
+            Gravity.START or Gravity.TOP
         )
-        params.setMargins(0, 0, dp(10), 0)
-
-        nav.translationY = dp(120).toFloat()
 
         addContentView(nav, params)
+
+        nav.post {
+            val parentView = nav.parent as? android.view.View ?: return@post
+            val savedX = prefs.getInt("floating_nav_x", -1)
+            val savedY = prefs.getInt("floating_nav_y", -1)
+
+            val defaultX = (parentView.width - nav.width - dp(12)).coerceAtLeast(dp(8))
+            val defaultY = ((parentView.height * 0.55f).toInt()).coerceAtLeast(dp(120))
+
+            val targetX = if (savedX >= 0) savedX else defaultX
+            val targetY = if (savedY >= 0) savedY else defaultY
+
+            val layoutParams = nav.layoutParams as android.widget.FrameLayout.LayoutParams
+            layoutParams.leftMargin = clampPosition(targetX, dp(8), parentView.width - nav.width - dp(8))
+            layoutParams.topMargin = clampPosition(targetY, dp(80), parentView.height - nav.height - dp(100))
+            nav.layoutParams = layoutParams
+        }
+
+        var downRawX = 0f
+        var downRawY = 0f
+        var startLeft = 0
+        var startTop = 0
+        var moved = false
+
+        nav.setOnTouchListener { view, event ->
+            val parentView = view.parent as? android.view.View ?: return@setOnTouchListener false
+            val layoutParams = view.layoutParams as android.widget.FrameLayout.LayoutParams
+
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startLeft = layoutParams.leftMargin
+                    startTop = layoutParams.topMargin
+                    moved = false
+                    true
+                }
+
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - downRawX).toInt()
+                    val dy = (event.rawY - downRawY).toInt()
+
+                    if (kotlin.math.abs(dx) > dp(3) || kotlin.math.abs(dy) > dp(3)) {
+                        moved = true
+                    }
+
+                    layoutParams.leftMargin = clampPosition(
+                        startLeft + dx,
+                        dp(8),
+                        parentView.width - view.width - dp(8)
+                    )
+                    layoutParams.topMargin = clampPosition(
+                        startTop + dy,
+                        dp(80),
+                        parentView.height - view.height - dp(100)
+                    )
+                    view.layoutParams = layoutParams
+                    true
+                }
+
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    prefs.edit()
+                        .putInt("floating_nav_x", layoutParams.leftMargin)
+                        .putInt("floating_nav_y", layoutParams.topMargin)
+                        .apply()
+
+                    if (!moved) {
+                        view.performClick()
+                    }
+                    true
+                }
+
+                else -> false
+            }
+        }
     }
 
     private fun filterButton(label: String, mb: Int): Button {
