@@ -534,6 +534,23 @@ class CleanupSimpleActivity : Activity() {
         }
     }
 
+    private fun fileTypeIcon(item: FileItem): String {
+        val name = item.name.lowercase(Locale.ROOT)
+        val type = item.type.lowercase(Locale.ROOT)
+        val path = item.path.lowercase(Locale.ROOT)
+
+        return when {
+            type.contains("vídeo") || type.contains("video") || name.endsWith(".mp4") || name.endsWith(".mov") || name.endsWith(".mkv") || name.endsWith(".avi") -> "▶"
+            type.contains("imagem") || type.contains("foto") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") -> "🖼"
+            type.contains("pdf") || name.endsWith(".pdf") -> "PDF"
+            type.contains("áudio") || type.contains("audio") || name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".ogg") || name.endsWith(".opus") || name.endsWith(".aac") -> "♪"
+            type.contains("apk") || name.endsWith(".apk") -> "APK"
+            type.contains("backup") || path.contains("backup") || name.contains("msgstore") || name.contains(".crypt") -> "▣"
+            name.endsWith(".zip") || name.endsWith(".rar") || name.endsWith(".7z") -> "ZIP"
+            else -> "📁"
+        }
+    }
+
     private fun fileRow(item: FileItem): LinearLayout {
         val box = card()
 
@@ -581,6 +598,23 @@ class CleanupSimpleActivity : Activity() {
             showFileDetails()
             true
         }
+
+        val fileIcon = TextView(this)
+        fileIcon.text = fileTypeIcon(item)
+        fileIcon.textSize = 15f
+        fileIcon.gravity = Gravity.CENTER
+        fileIcon.setTypeface(null, Typeface.BOLD)
+        fileIcon.setTextColor(Color.rgb(42, 92, 255))
+        fileIcon.background = rounded(
+            Color.rgb(238, 243, 255),
+            Color.rgb(205, 216, 245),
+            dp(12)
+        )
+        fileIcon.setOnClickListener { openThisFile() }
+
+        val iconParams = LinearLayout.LayoutParams(dp(38), dp(38))
+        iconParams.setMargins(0, 0, dp(10), 0)
+        titleRow.addView(fileIcon, iconParams)
 
         val nameParams = LinearLayout.LayoutParams(
             0,
