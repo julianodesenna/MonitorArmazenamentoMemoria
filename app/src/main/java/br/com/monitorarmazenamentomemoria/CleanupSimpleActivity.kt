@@ -358,7 +358,7 @@ class CleanupSimpleActivity : Activity() {
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         )
 
-        val activeYear = if (yearFilter == "Todos" || categoryTitle == "Novos nas últimas 24h") "" else " • $yearFilter"
+        val activeYear = if (yearFilter == "Todos") "" else " • $yearFilter"
         val filterResume = TextView(this)
         filterResume.text = "${if (orderMode == "size") "Maiores" else if (orderMode == "date") "Recentes" else "Antigos"}$activeYear"
         filterResume.textSize = 11f
@@ -414,72 +414,66 @@ class CleanupSimpleActivity : Activity() {
 
         filter.addView(orderRow)
 
-        if (categoryTitle != "Novos nas últimas 24h") {
-            val yearTitle = TextView(this)
-            yearTitle.text = "Ano"
-            yearTitle.textSize = 11f
-            yearTitle.setTypeface(null, Typeface.BOLD)
-            yearTitle.setTextColor(Color.rgb(80, 90, 110))
-            yearTitle.setPadding(0, dp(4), 0, dp(6))
-            filter.addView(yearTitle)
+        val yearTitle = TextView(this)
+        yearTitle.text = "Ano"
+        yearTitle.textSize = 11f
+        yearTitle.setTypeface(null, Typeface.BOLD)
+        yearTitle.setTextColor(Color.rgb(80, 90, 110))
+        yearTitle.setPadding(0, dp(4), 0, dp(6))
+        filter.addView(yearTitle)
 
-            val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-            val yearOptions = mutableListOf("Todos")
-            yearOptions.addAll((currentYear downTo 2017).map { it.toString() })
-            yearOptions.add("Antes de 2017")
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val yearOptions = mutableListOf("Todos")
+        yearOptions.addAll((currentYear downTo 2017).map { it.toString() })
+        yearOptions.add("Antes de 2017")
 
-            val selectedYearText = if (yearFilter == "Antes de 2017") "Antes 2017" else yearFilter
+        val selectedYearText = if (yearFilter == "Antes de 2017") "Antes 2017" else yearFilter
 
-            val yearButton = TextView(this)
-            yearButton.text = "Ano: $selectedYearText  ▾"
-            yearButton.textSize = 12f
-            yearButton.gravity = Gravity.CENTER_VERTICAL
-            yearButton.includeFontPadding = false
-            yearButton.setTypeface(null, Typeface.BOLD)
-            yearButton.setPadding(dp(14), 0, dp(14), 0)
-            yearButton.setTextColor(Color.rgb(35, 45, 65))
-            yearButton.background = rounded(
-                Color.rgb(248, 250, 253),
-                Color.rgb(218, 225, 236),
-                dp(16)
-            )
-            yearButton.elevation = dp(1).toFloat()
-            yearButton.isClickable = true
-            yearButton.isFocusable = true
-            yearButton.setOnClickListener { view ->
-                val popup = android.widget.PopupMenu(this@CleanupSimpleActivity, view)
+        val yearButton = TextView(this)
+        yearButton.text = "Ano: $selectedYearText  ▾"
+        yearButton.textSize = 12f
+        yearButton.gravity = Gravity.CENTER_VERTICAL
+        yearButton.includeFontPadding = false
+        yearButton.setTypeface(null, Typeface.BOLD)
+        yearButton.setPadding(dp(14), 0, dp(14), 0)
+        yearButton.setTextColor(Color.rgb(35, 45, 65))
+        yearButton.background = rounded(
+            Color.rgb(248, 250, 253),
+            Color.rgb(218, 225, 236),
+            dp(16)
+        )
+        yearButton.elevation = dp(1).toFloat()
+        yearButton.isClickable = true
+        yearButton.isFocusable = true
+        yearButton.setOnClickListener { view ->
+            val popup = android.widget.PopupMenu(this@CleanupSimpleActivity, view)
 
-                yearOptions.forEachIndexed { index, option ->
-                    popup.menu.add(0, index, index, option)
-                }
-
-                popup.setOnMenuItemClickListener { item ->
-                    val selected = yearOptions.getOrNull(item.itemId) ?: "Todos"
-                    yearFilter = selected
-                    categoryDisplayLimit = 120
-                    autoLoadMoreLocked = false
-                    showCategory(categoryTitle, categoryDesc)
-                    true
-                }
-
-                popup.show()
+            yearOptions.forEachIndexed { index, option ->
+                popup.menu.add(0, index, index, option)
             }
 
-            val yearParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(34)
-            )
-            yearParams.setMargins(0, 0, 0, dp(4))
-            filter.addView(yearButton, yearParams)
+            popup.setOnMenuItemClickListener { item ->
+                val selected = yearOptions.getOrNull(item.itemId) ?: "Todos"
+                yearFilter = selected
+                categoryDisplayLimit = 120
+                autoLoadMoreLocked = false
+                showCategory(categoryTitle, categoryDesc)
+                true
+            }
+
+            popup.show()
         }
+
+        val yearParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(34)
+        )
+        yearParams.setMargins(0, 0, 0, dp(4))
+        filter.addView(yearButton, yearParams)
 
         root.addView(filter)
 
-        val allCategoryItems = if (categoryTitle == "Novos nas últimas 24h") {
-            ordered(rawCategoryItems)
-        } else {
-            ordered(filterByYear(rawCategoryItems))
-        }
+        val allCategoryItems = ordered(filterByYear(rawCategoryItems))
         val files = allCategoryItems.take(categoryDisplayLimit)
 
         val selectionBox = card()
