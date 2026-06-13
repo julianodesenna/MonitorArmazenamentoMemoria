@@ -625,20 +625,19 @@ class CleanupSimpleActivity : Activity() {
         )
         addWeightedChip(actionRow, deleteButton)
 
-        val showClearSelection = selectedFiles.isNotEmpty()
-        if (showClearSelection) {
-            val clearButton = chipButton("Limpar", false) {
-                selectedFiles.clear()
-                showCategory(categoryTitle, categoryDesc)
-            }
-            clearButton.setTextColor(Color.rgb(80, 90, 110))
-            clearButton.background = rounded(
-                Color.rgb(248, 250, 253),
-                Color.rgb(218, 225, 236),
-                dp(18)
-            )
-            addWeightedChip(actionRow, clearButton)
+        val clearButton = chipButton("Limpar", false) {
+            selectedFiles.clear()
+            showCategory(categoryTitle, categoryDesc)
         }
+        clearButton.tag = "cleanup_clear_selection_button"
+        clearButton.setTextColor(Color.rgb(80, 90, 110))
+        clearButton.background = rounded(
+            Color.rgb(248, 250, 253),
+            Color.rgb(218, 225, 236),
+            dp(18)
+        )
+        clearButton.visibility = if (selectedFiles.isNotEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+        addWeightedChip(actionRow, clearButton)
 
         selectionBox.addView(actionRow)
 
@@ -689,11 +688,11 @@ class CleanupSimpleActivity : Activity() {
         val nav = LinearLayout(this)
         nav.tag = "cleanup_floating_list_nav"
         nav.orientation = LinearLayout.VERTICAL
-        nav.setPadding(dp(8), dp(8), dp(8), dp(8))
+        nav.setPadding(dp(5), dp(6), dp(5), dp(5))
         nav.background = rounded(
             Color.argb(248, 255, 255, 255),
             Color.rgb(218, 225, 236),
-            dp(22)
+            dp(18)
         )
         nav.elevation = dp(10).toFloat()
 
@@ -714,11 +713,11 @@ class CleanupSimpleActivity : Activity() {
         fun floatingButton(label: String, onClick: () -> Unit): TextView {
             return TextView(this).apply {
                 text = label
-                textSize = 12f
+                textSize = 20f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setTypeface(null, Typeface.BOLD)
-                setPadding(dp(10), 0, dp(10), 0)
+                setPadding(0, 0, 0, 0)
                 setTextColor(Color.rgb(35, 45, 65))
                 background = rounded(
                     Color.rgb(248, 250, 253),
@@ -731,25 +730,48 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
-        val topButton = floatingButton("↑ Topo") {
+        val dragHandle = TextView(this).apply {
+            text = "⋮"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.rgb(80, 90, 110))
+            background = rounded(
+                Color.rgb(242, 245, 250),
+                Color.rgb(205, 214, 230),
+                dp(14)
+            )
+            isClickable = true
+            isFocusable = true
+        }
+
+        val topButton = floatingButton("↑") {
             scrollToTop()
         }
 
-        val bottomButton = floatingButton("↓ Final") {
+        val bottomButton = floatingButton("↓") {
             scrollToBottom()
         }
 
-        val topParams = LinearLayout.LayoutParams(
-            dp(86),
-            dp(34)
+        val dragHandleParams = LinearLayout.LayoutParams(
+            dp(42),
+            dp(28)
         )
-        topParams.setMargins(0, 0, 0, dp(6))
+        dragHandleParams.setMargins(0, 0, 0, dp(4))
+
+        val topParams = LinearLayout.LayoutParams(
+            dp(42),
+            dp(42)
+        )
+        topParams.setMargins(0, 0, 0, dp(4))
 
         val bottomParams = LinearLayout.LayoutParams(
-            dp(86),
-            dp(34)
+            dp(42),
+            dp(42)
         )
 
+        nav.addView(dragHandle, dragHandleParams)
         nav.addView(topButton, topParams)
         nav.addView(bottomButton, bottomParams)
 
@@ -781,7 +803,7 @@ class CleanupSimpleActivity : Activity() {
 
             val layoutParams = nav.layoutParams as android.widget.FrameLayout.LayoutParams
             layoutParams.leftMargin = clampPosition(targetX, dp(8), parentView.width - nav.width - dp(8))
-            layoutParams.topMargin = clampPosition(targetY, dp(80), parentView.height - nav.height - dp(100))
+            layoutParams.topMargin = clampPosition(targetY, dp(80), parentView.height - nav.height - dp(96))
             nav.layoutParams = layoutParams
         }
 
@@ -1283,6 +1305,9 @@ class CleanupSimpleActivity : Activity() {
             val selected = allFiles.filter { selectedFiles.contains(it.path) }
             selectedInfoText.text = "${selected.size} selecionados • ${formatSize(selected.sumOf { it.size })}"
         }
+        val clearButton = root.findViewWithTag<android.view.View>("cleanup_clear_selection_button")
+        clearButton?.visibility = if (selectedFiles.isNotEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+
     }
 
     private fun shareSelectedFiles() {
