@@ -193,7 +193,7 @@ class CleanupSimpleActivity : Activity() {
         categoriesTitle.setPadding(0, dp(8), 0, dp(10))
         root.addView(categoriesTitle)
 
-        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Recentes", "Arquivos modificados recentemente")
+        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Últimos modificados", "Arquivos alterados mais recentemente")
         addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
         addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
         addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
@@ -1476,7 +1476,7 @@ class CleanupSimpleActivity : Activity() {
             "Áudios" -> allFiles.filter { it.category == "Áudios" }
             "WhatsApp" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("whatsapp") }
             "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" }
-            "Recentes" -> allFiles.sortedByDescending { it.modified }.take(200)
+            "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
             "Sensíveis" -> allFiles.filter { it.risk == "alto" }
             "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
             "APKs" -> allFiles.filter { it.category == "APKs" }
