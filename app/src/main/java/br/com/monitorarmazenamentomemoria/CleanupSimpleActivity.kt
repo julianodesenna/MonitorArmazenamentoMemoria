@@ -41,6 +41,7 @@ class CleanupSimpleActivity : Activity() {
     private var allFiles: List<FileItem> = emptyList()
     private val selectedFiles = mutableSetOf<String>()
     private var categoryDisplayLimit = 120
+    private var autoLoadMoreLocked = false
     private lateinit var selectedInfoText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -239,6 +240,7 @@ class CleanupSimpleActivity : Activity() {
         if (currentCategory != categoryTitle) {
             categoryDisplayLimit = 120
         }
+        autoLoadMoreLocked = false
         currentCategory = categoryTitle
         root.removeAllViews()
 
@@ -378,16 +380,8 @@ class CleanupSimpleActivity : Activity() {
         summary.setPadding(0, dp(4), 0, dp(12))
         root.addView(summary)
 
-        if (files.size < allCategoryItems.size) {
-            val loadMore = Button(this)
-            val remaining = allCategoryItems.size - files.size
-            loadMore.text = "Carregar mais ${minOf(200, remaining)} arquivos"
-            loadMore.setOnClickListener {
-                categoryDisplayLimit += 200
-                showCategory(categoryTitle, categoryDesc)
-            }
-            root.addView(loadMore)
-        }
+
+        setupAutoLoadMore(allCategoryItems.size, files.size, categoryTitle, categoryDesc)
 
         if (files.isEmpty()) {
             val empty = card()
@@ -1125,6 +1119,32 @@ class CleanupSimpleActivity : Activity() {
             "Backups do WhatsApp" -> allFiles.filter { isWhatsAppBackup(it) }
             "Todos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
             else -> allFiles
+        }
+    }
+
+    private fun setupAutoLoadMore(totalItems: Int, shownItems: Int, categoryTitle: String, categoryDesc: String) {
+        if (!::scroll.isInitialized) return
+        if (shownItems >= totalItems) return
+
+        scroll.viewTreeObserver.addOnScrollChangedListener {
+            if (autoLoadMoreLocked) return@addOnScrollChangedListener
+            if (currentCategory != categoryTitle) return@addOnScrollChangedListener
+            if (categoryDisplayLimit >= totalItems) return@addOnScrollChangedListener
+
+            val child = scroll.getChildAt(scroll.childCount - 1) ?: return@addOnScrollChangedListener
+            val distanceToBottom = child.bottom - (scroll.height + scroll.scrollY)
+
+            if (distanceToBottom <= dp(900)) {
+                autoLoadMoreLocked = true
+                categoryDisplayLimit = minOf(categoryDisplayLimit + 200, totalItems)
+
+                Toast.makeText(this, "Carregando mais arquivos...", Toast.LENGTH_SHORT).show()
+
+                scroll.postDelayed({
+                    autoLoadMoreLocked = false
+                    showCategory(categoryTitle, categoryDesc)
+                }, 120)
+            }
         }
     }
 
