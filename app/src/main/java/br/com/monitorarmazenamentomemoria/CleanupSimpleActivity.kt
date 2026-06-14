@@ -652,6 +652,73 @@ class CleanupSimpleActivity : Activity() {
         summary.setPadding(0, dp(4), 0, dp(12))
         root.addView(summary)
 
+        val inlineNavBox = card()
+        inlineNavBox.setPadding(dp(12), dp(10), dp(12), dp(10))
+
+        val inlineNavTitle = TextView(this)
+        inlineNavTitle.text = "Navegação da lista"
+        inlineNavTitle.textSize = 12f
+        inlineNavTitle.setTypeface(null, Typeface.BOLD)
+        inlineNavTitle.setTextColor(Color.rgb(80, 90, 110))
+        inlineNavTitle.setPadding(0, 0, 0, dp(8))
+        inlineNavBox.addView(inlineNavTitle)
+
+        val inlineNavRow = LinearLayout(this)
+        inlineNavRow.orientation = LinearLayout.HORIZONTAL
+
+        fun inlineNavButton(label: String, onClick: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = label
+                textSize = 13f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setPadding(dp(12), 0, dp(12), 0)
+                setTextColor(Color.rgb(35, 45, 65))
+                background = rounded(
+                    Color.rgb(248, 250, 253),
+                    Color.rgb(205, 214, 230),
+                    dp(18)
+                )
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+        }
+
+        val inlineTopButton = inlineNavButton("↑ Topo") {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, 0)
+            }
+        }
+
+        val inlineBottomButton = inlineNavButton("↓ Final") {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, root.height)
+            }
+        }
+
+        val inlineTopParams = LinearLayout.LayoutParams(
+            0,
+            dp(38),
+            1f
+        )
+        inlineTopParams.setMargins(0, 0, dp(6), 0)
+
+        val inlineBottomParams = LinearLayout.LayoutParams(
+            0,
+            dp(38),
+            1f
+        )
+        inlineBottomParams.setMargins(dp(6), 0, 0, 0)
+
+        inlineNavRow.addView(inlineTopButton, inlineTopParams)
+        inlineNavRow.addView(inlineBottomButton, inlineBottomParams)
+        inlineNavBox.addView(inlineNavRow)
+
+        root.addView(inlineNavBox)
 
         setupAutoLoadMore(allCategoryItems.size, files.size, categoryTitle, categoryDesc)
 
@@ -684,86 +751,6 @@ class CleanupSimpleActivity : Activity() {
 
     private fun showFloatingListNav() {
         removeFloatingListNav()
-
-        val bar = LinearLayout(this)
-        bar.tag = "cleanup_floating_list_nav"
-        bar.orientation = LinearLayout.HORIZONTAL
-        bar.gravity = Gravity.CENTER
-        bar.setPadding(dp(10), dp(7), dp(10), dp(7))
-        bar.background = rounded(
-            Color.argb(250, 255, 255, 255),
-            Color.rgb(218, 225, 236),
-            dp(22)
-        )
-        bar.elevation = dp(8).toFloat()
-
-        fun scrollToTop() {
-            val scrollView = root.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.smoothScrollTo(0, 0)
-            }
-        }
-
-        fun scrollToBottom() {
-            val scrollView = root.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.smoothScrollTo(0, root.height)
-            }
-        }
-
-        fun fixedNavButton(label: String, onClick: () -> Unit): TextView {
-            return TextView(this).apply {
-                text = label
-                textSize = 13f
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                setTypeface(null, Typeface.BOLD)
-                setPadding(dp(12), 0, dp(12), 0)
-                setTextColor(Color.rgb(35, 45, 65))
-                background = rounded(
-                    Color.rgb(248, 250, 253),
-                    Color.rgb(205, 214, 230),
-                    dp(18)
-                )
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { onClick() }
-            }
-        }
-
-        val topButton = fixedNavButton("↑ Topo") {
-            scrollToTop()
-        }
-
-        val bottomButton = fixedNavButton("↓ Final") {
-            scrollToBottom()
-        }
-
-        val topParams = LinearLayout.LayoutParams(
-            0,
-            dp(36),
-            1f
-        )
-        topParams.setMargins(0, 0, dp(6), 0)
-
-        val bottomParams = LinearLayout.LayoutParams(
-            0,
-            dp(36),
-            1f
-        )
-        bottomParams.setMargins(dp(6), 0, 0, 0)
-
-        bar.addView(topButton, topParams)
-        bar.addView(bottomButton, bottomParams)
-
-        val params = android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM
-        )
-        params.setMargins(dp(18), 0, dp(18), dp(82))
-
-        addContentView(bar, params)
     }
 
     private fun filterButton(label: String, mb: Int): Button {
