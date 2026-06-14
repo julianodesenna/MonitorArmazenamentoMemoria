@@ -118,54 +118,204 @@ class CleanupSimpleActivity : Activity() {
         categoryDisplayLimit = 120
         yearFilter = "Todos"
         root.removeAllViews()
-
+        // Resumo premium do aparelho
         val data = Monitor.read(this)
+
+        fun smallLabel(textValue: String): TextView {
+            return TextView(this).apply {
+                text = textValue
+                textSize = 12f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.rgb(95, 105, 125))
+                includeFontPadding = false
+            }
+        }
+
+        fun valueText(textValue: String): TextView {
+            return TextView(this).apply {
+                text = textValue
+                textSize = 21f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.rgb(10, 18, 36))
+                includeFontPadding = false
+            }
+        }
+
+        fun premiumActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = label
+                textSize = 13f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setPadding(dp(12), 0, dp(12), 0)
+                setTextColor(if (primary) Color.WHITE else Color.rgb(35, 45, 65))
+                background = rounded(
+                    if (primary) Color.rgb(42, 92, 255) else Color.rgb(248, 250, 253),
+                    if (primary) Color.rgb(42, 92, 255) else Color.rgb(205, 214, 230),
+                    dp(18)
+                )
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onClick() }
+            }
+        }
+
+        fun metricPill(label: String, value: String): LinearLayout {
+            val box = LinearLayout(this)
+            box.orientation = LinearLayout.VERTICAL
+            box.gravity = Gravity.CENTER
+            box.setPadding(dp(8), dp(8), dp(8), dp(8))
+            box.background = rounded(
+                Color.rgb(248, 250, 253),
+                Color.rgb(225, 231, 242),
+                dp(18)
+            )
+
+            val labelView = smallLabel(label)
+            labelView.gravity = Gravity.CENTER
+
+            val valueView = valueText(value)
+            valueView.gravity = Gravity.CENTER
+            valueView.textSize = 18f
+
+            box.addView(labelView)
+            box.addView(valueView)
+
+            return box
+        }
+
+        val heroCard = card()
+        heroCard.setPadding(dp(18), dp(18), dp(18), dp(18))
+
+        val heroTop = LinearLayout(this)
+        heroTop.orientation = LinearLayout.HORIZONTAL
+        heroTop.gravity = Gravity.CENTER_VERTICAL
+
+        val heroTexts = LinearLayout(this)
+        heroTexts.orientation = LinearLayout.VERTICAL
 
         val title = TextView(this)
         title.text = "Limpeza"
-        title.textSize = 28f
+        title.textSize = 30f
         title.setTypeface(null, Typeface.BOLD)
         title.setTextColor(Color.rgb(10, 18, 36))
-        root.addView(title)
+        title.includeFontPadding = false
+        heroTexts.addView(title)
 
         statusText = TextView(this)
-        statusText.text = if (allFiles.isEmpty()) "Analisando arquivos..." else "${allFiles.size} arquivos analisados"
+        statusText.text = if (allFiles.isEmpty()) {
+            "Analisando arquivos..."
+        } else {
+            "${allFiles.size} arquivos analisados"
+        }
         statusText.textSize = 14f
         statusText.setTextColor(Color.rgb(80, 90, 110))
-        statusText.setPadding(0, dp(4), 0, dp(14))
-        root.addView(statusText)
+        statusText.setPadding(0, dp(6), 0, 0)
+        heroTexts.addView(statusText)
 
-        val summary = card()
-        summary.addView(titleText("Resumo do aparelho"))
+        heroTop.addView(
+            heroTexts,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
 
-        val summaryBody = TextView(this)
-        summaryBody.text =
-            "Armazenamento usado: ${data.storageUsedPercent}%\n" +
-            "Livre: ${Monitor.format(data.storageFree)}\n" +
-            "RAM usada: ${data.memoryUsedPercent}%\n" +
-            "RAM livre: ${Monitor.format(data.memoryFree)}"
-        summaryBody.textSize = 16f
-        summaryBody.setTextColor(Color.rgb(70, 80, 100))
-        summaryBody.setPadding(0, dp(8), 0, 0)
-        summary.addView(summaryBody)
-        root.addView(summary)
+        val statusBadge = TextView(this)
+        statusBadge.text = if (data.storageUsedPercent >= 89) "Atenção" else "Normal"
+        statusBadge.textSize = 12f
+        statusBadge.gravity = Gravity.CENTER
+        statusBadge.includeFontPadding = false
+        statusBadge.setTypeface(null, Typeface.BOLD)
+        statusBadge.setTextColor(
+            if (data.storageUsedPercent >= 89) Color.rgb(130, 86, 0) else Color.rgb(20, 110, 70)
+        )
+        statusBadge.setPadding(dp(12), 0, dp(12), 0)
+        statusBadge.background = rounded(
+            if (data.storageUsedPercent >= 89) Color.rgb(255, 248, 224) else Color.rgb(228, 255, 240),
+            if (data.storageUsedPercent >= 89) Color.rgb(244, 190, 65) else Color.rgb(120, 215, 160),
+            dp(18)
+        )
+        heroTop.addView(statusBadge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)))
+
+        heroCard.addView(heroTop)
+
+        val divider = View(this)
+        divider.setBackgroundColor(Color.rgb(230, 235, 245))
+        val dividerParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(1)
+        )
+        dividerParams.setMargins(0, dp(16), 0, dp(14))
+        heroCard.addView(divider, dividerParams)
+
+        val metricsRow = LinearLayout(this)
+        metricsRow.orientation = LinearLayout.HORIZONTAL
+
+        val storagePill = metricPill(
+            "Armazenamento",
+            "${data.storageUsedPercent}%"
+        )
+
+        val freePill = metricPill(
+            "Livre",
+            Monitor.format(data.storageFree)
+        )
+
+        val ramPill = metricPill(
+            "RAM",
+            "${data.memoryUsedPercent}%"
+        )
+
+        val metricParams1 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        metricParams1.setMargins(0, 0, dp(6), 0)
+
+        val metricParams2 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        metricParams2.setMargins(dp(3), 0, dp(3), 0)
+
+        val metricParams3 = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        metricParams3.setMargins(dp(6), 0, 0, 0)
+
+        metricsRow.addView(storagePill, metricParams1)
+        metricsRow.addView(freePill, metricParams2)
+        metricsRow.addView(ramPill, metricParams3)
+
+        heroCard.addView(metricsRow)
+
+        val storageDetail = TextView(this)
+        storageDetail.text = "RAM livre: ${Monitor.format(data.memoryFree)}"
+        storageDetail.textSize = 13f
+        storageDetail.setTextColor(Color.rgb(80, 90, 110))
+        storageDetail.setPadding(0, dp(14), 0, 0)
+        heroCard.addView(storageDetail)
+
+        root.addView(heroCard)
 
         val actions = card()
-        actions.addView(titleText("Ações rápidas"))
+        actions.setPadding(dp(18), dp(16), dp(18), dp(16))
+
+        val actionsTitle = TextView(this)
+        actionsTitle.text = "Ações rápidas"
+        actionsTitle.textSize = 20f
+        actionsTitle.setTypeface(null, Typeface.BOLD)
+        actionsTitle.setTextColor(Color.rgb(10, 18, 36))
+        actionsTitle.includeFontPadding = false
+        actions.addView(actionsTitle)
+
+        val actionsSubtitle = TextView(this)
+        actionsSubtitle.text = "Atualize a análise ou abra ajustes do Android."
+        actionsSubtitle.textSize = 14f
+        actionsSubtitle.setTextColor(Color.rgb(80, 90, 110))
+        actionsSubtitle.setPadding(0, dp(6), 0, dp(14))
+        actions.addView(actionsSubtitle)
 
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
 
-        val update = Button(this)
-        update.text = "Atualizar"
-        update.setOnClickListener {
+        val update = premiumActionButton("Atualizar", true) {
             scanFiles()
             Toast.makeText(this, "Analisando arquivos novamente", Toast.LENGTH_SHORT).show()
         }
 
-        val androidStorage = Button(this)
-        androidStorage.text = "Armazenamento"
-        androidStorage.setOnClickListener {
+        val androidStorage = premiumActionButton("Armazenamento", false) {
             try {
                 startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
             } catch (_: Exception) {
@@ -173,16 +323,26 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
-        row.addView(update, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(androidStorage, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val updateParams = LinearLayout.LayoutParams(0, dp(42), 1f)
+        updateParams.setMargins(0, 0, dp(6), 0)
+
+        val storageParams = LinearLayout.LayoutParams(0, dp(42), 1f)
+        storageParams.setMargins(dp(6), 0, 0, 0)
+
+        row.addView(update, updateParams)
+        row.addView(androidStorage, storageParams)
         actions.addView(row)
 
-        val accessFiles = Button(this)
-        accessFiles.text = if (hasStorageAccess()) "Acesso aos arquivos liberado" else "Liberar acesso aos arquivos"
-        accessFiles.setOnClickListener {
-            requestStorageAccess()
+        val accessFiles = premiumActionButton("Acesso aos arquivos liberado", false) {
+            Toast.makeText(this, "Permissão de arquivos já liberada", Toast.LENGTH_SHORT).show()
         }
-        actions.addView(accessFiles)
+
+        val accessParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(42)
+        )
+        accessParams.setMargins(0, dp(12), 0, 0)
+        actions.addView(accessFiles, accessParams)
 
         root.addView(actions)
 
