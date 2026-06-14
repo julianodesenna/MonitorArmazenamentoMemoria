@@ -652,74 +652,6 @@ class CleanupSimpleActivity : Activity() {
         summary.setPadding(0, dp(4), 0, dp(12))
         root.addView(summary)
 
-        val inlineNavBox = card()
-        inlineNavBox.setPadding(dp(12), dp(10), dp(12), dp(10))
-
-        val inlineNavTitle = TextView(this)
-        inlineNavTitle.text = "Navegação da lista"
-        inlineNavTitle.textSize = 12f
-        inlineNavTitle.setTypeface(null, Typeface.BOLD)
-        inlineNavTitle.setTextColor(Color.rgb(80, 90, 110))
-        inlineNavTitle.setPadding(0, 0, 0, dp(8))
-        inlineNavBox.addView(inlineNavTitle)
-
-        val inlineNavRow = LinearLayout(this)
-        inlineNavRow.orientation = LinearLayout.HORIZONTAL
-
-        fun inlineNavButton(label: String, onClick: () -> Unit): TextView {
-            return TextView(this).apply {
-                text = label
-                textSize = 13f
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                setTypeface(null, Typeface.BOLD)
-                setPadding(dp(12), 0, dp(12), 0)
-                setTextColor(Color.rgb(35, 45, 65))
-                background = rounded(
-                    Color.rgb(248, 250, 253),
-                    Color.rgb(205, 214, 230),
-                    dp(18)
-                )
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { onClick() }
-            }
-        }
-
-        val inlineTopButton = inlineNavButton("↑ Topo") {
-            val scrollView = root.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.smoothScrollTo(0, 0)
-            }
-        }
-
-        val inlineBottomButton = inlineNavButton("↓ Final") {
-            val scrollView = root.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.smoothScrollTo(0, root.height)
-            }
-        }
-
-        val inlineTopParams = LinearLayout.LayoutParams(
-            0,
-            dp(38),
-            1f
-        )
-        inlineTopParams.setMargins(0, 0, dp(6), 0)
-
-        val inlineBottomParams = LinearLayout.LayoutParams(
-            0,
-            dp(38),
-            1f
-        )
-        inlineBottomParams.setMargins(dp(6), 0, 0, 0)
-
-        inlineNavRow.addView(inlineTopButton, inlineTopParams)
-        inlineNavRow.addView(inlineBottomButton, inlineBottomParams)
-        inlineNavBox.addView(inlineNavRow)
-
-        root.addView(inlineNavBox)
-
         setupAutoLoadMore(allCategoryItems.size, files.size, categoryTitle, categoryDesc)
 
         if (files.isEmpty()) {
@@ -1895,80 +1827,6 @@ class CleanupSimpleActivity : Activity() {
         return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(ms))
     }
 
-    private fun drawWidget() {
-        removeFloatingListNav()
-        currentCategory = ""
-        categoryDisplayLimit = 120
-        root.removeAllViews()
-
-        val title = TextView(this)
-        title.text = "Widget"
-        title.textSize = 28f
-        title.setTypeface(null, Typeface.BOLD)
-        title.setTextColor(Color.rgb(10, 18, 36))
-        root.addView(title)
-
-        val subtitle = TextView(this)
-        subtitle.text = "Acompanhe armazenamento e memória direto na tela inicial do celular."
-        subtitle.textSize = 15f
-        subtitle.setTextColor(Color.rgb(80, 90, 110))
-        subtitle.setPadding(0, dp(4), 0, dp(14))
-        root.addView(subtitle)
-
-        val mainCard = card()
-        mainCard.addView(titleText("Widget do Android"))
-
-        val mainText = TextView(this)
-        mainText.text =
-            "O widget serve para mostrar informações rápidas do aparelho sem precisar abrir o app.\n\n" +
-            "Ele pode ajudar a acompanhar armazenamento, memória RAM e acesso rápido à limpeza."
-        mainText.textSize = 16f
-        mainText.setTextColor(Color.rgb(70, 80, 100))
-        mainText.setPadding(0, dp(8), 0, dp(10))
-        mainCard.addView(mainText)
-
-        val widgetItems = TextView(this)
-        widgetItems.text =
-            "• Armazenamento usado e livre\n" +
-            "• Memória/RAM em uso\n" +
-            "• Acesso rápido à limpeza\n" +
-            "• Status geral do aparelho"
-        widgetItems.textSize = 15f
-        widgetItems.setTextColor(Color.rgb(45, 55, 75))
-        widgetItems.setPadding(0, dp(4), 0, 0)
-        mainCard.addView(widgetItems)
-
-        root.addView(mainCard)
-
-        val howCard = card()
-        howCard.addView(titleText("Como adicionar na tela inicial"))
-
-        val steps = TextView(this)
-        steps.text =
-            "1. Toque e segure em uma área vazia da tela inicial.\n" +
-            "2. Toque em Widgets.\n" +
-            "3. Procure este app na lista.\n" +
-            "4. Segure o widget e arraste para a tela inicial."
-        steps.textSize = 15f
-        steps.setTextColor(Color.rgb(70, 80, 100))
-        steps.setPadding(0, dp(8), 0, 0)
-        howCard.addView(steps)
-
-        root.addView(howCard)
-
-        val noteCard = card()
-        noteCard.addView(titleText("Observação"))
-
-        val note = TextView(this)
-        note.text = "Se o widget não aparecer ou não atualizar, remova e adicione novamente na tela inicial."
-        note.textSize = 14f
-        note.setTextColor(Color.rgb(80, 90, 110))
-        note.setPadding(0, dp(8), 0, 0)
-        noteCard.addView(note)
-
-        root.addView(noteCard)
-    }
-
     private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
@@ -1981,10 +1839,6 @@ class CleanupSimpleActivity : Activity() {
             finish()
         })
 
-        nav.addView(navItem("▦\nWidget", false) {
-            drawWidget()
-        })
-
         nav.addView(navItem("✦\nLimpeza", true) {
             drawHome()
         })
@@ -1992,6 +1846,20 @@ class CleanupSimpleActivity : Activity() {
         nav.addView(navItem("⚙\nConfig.", false) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
+        })
+
+        nav.addView(navItem("↑", false) {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, 0)
+            }
+        })
+
+        nav.addView(navItem("↓", false) {
+            val scrollView = root.parent as? android.widget.ScrollView
+            scrollView?.post {
+                scrollView.smoothScrollTo(0, root.height)
+            }
         })
 
         return nav
