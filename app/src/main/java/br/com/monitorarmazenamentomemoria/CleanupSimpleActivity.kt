@@ -685,16 +685,17 @@ class CleanupSimpleActivity : Activity() {
     private fun showFloatingListNav() {
         removeFloatingListNav()
 
-        val nav = LinearLayout(this)
-        nav.tag = "cleanup_floating_list_nav"
-        nav.orientation = LinearLayout.VERTICAL
-        nav.setPadding(dp(5), dp(6), dp(5), dp(5))
-        nav.background = rounded(
-            Color.argb(248, 255, 255, 255),
+        val bar = LinearLayout(this)
+        bar.tag = "cleanup_floating_list_nav"
+        bar.orientation = LinearLayout.HORIZONTAL
+        bar.gravity = Gravity.CENTER
+        bar.setPadding(dp(10), dp(7), dp(10), dp(7))
+        bar.background = rounded(
+            Color.argb(250, 255, 255, 255),
             Color.rgb(218, 225, 236),
-            dp(18)
+            dp(22)
         )
-        nav.elevation = dp(10).toFloat()
+        bar.elevation = dp(8).toFloat()
 
         fun scrollToTop() {
             val scrollView = root.parent as? android.widget.ScrollView
@@ -710,19 +711,19 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
-        fun floatingButton(label: String, onClick: () -> Unit): TextView {
+        fun fixedNavButton(label: String, onClick: () -> Unit): TextView {
             return TextView(this).apply {
                 text = label
-                textSize = 20f
+                textSize = 13f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setTypeface(null, Typeface.BOLD)
-                setPadding(0, 0, 0, 0)
+                setPadding(dp(12), 0, dp(12), 0)
                 setTextColor(Color.rgb(35, 45, 65))
                 background = rounded(
                     Color.rgb(248, 250, 253),
                     Color.rgb(205, 214, 230),
-                    dp(16)
+                    dp(18)
                 )
                 isClickable = true
                 isFocusable = true
@@ -730,141 +731,39 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
-        val dragHandle = TextView(this).apply {
-            text = "⋮"
-            textSize = 18f
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(80, 90, 110))
-            background = rounded(
-                Color.rgb(242, 245, 250),
-                Color.rgb(205, 214, 230),
-                dp(14)
-            )
-            isClickable = true
-            isFocusable = true
-        }
-
-        val topButton = floatingButton("↑") {
+        val topButton = fixedNavButton("↑ Topo") {
             scrollToTop()
         }
 
-        val bottomButton = floatingButton("↓") {
+        val bottomButton = fixedNavButton("↓ Final") {
             scrollToBottom()
         }
 
-        val dragHandleParams = LinearLayout.LayoutParams(
-            dp(42),
-            dp(28)
-        )
-        dragHandleParams.setMargins(0, 0, 0, dp(4))
-
         val topParams = LinearLayout.LayoutParams(
-            dp(42),
-            dp(42)
+            0,
+            dp(36),
+            1f
         )
-        topParams.setMargins(0, 0, 0, dp(4))
+        topParams.setMargins(0, 0, dp(6), 0)
 
         val bottomParams = LinearLayout.LayoutParams(
-            dp(42),
-            dp(42)
+            0,
+            dp(36),
+            1f
         )
+        bottomParams.setMargins(dp(6), 0, 0, 0)
 
-        nav.addView(dragHandle, dragHandleParams)
-        nav.addView(topButton, topParams)
-        nav.addView(bottomButton, bottomParams)
-
-        val prefs = getSharedPreferences("cleanup_ui", MODE_PRIVATE)
-
-        fun clampPosition(value: Int, min: Int, max: Int): Int {
-            val safeMax = maxOf(min, max)
-            return value.coerceIn(min, safeMax)
-        }
+        bar.addView(topButton, topParams)
+        bar.addView(bottomButton, bottomParams)
 
         val params = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.START or Gravity.TOP
+            Gravity.BOTTOM
         )
+        params.setMargins(dp(18), 0, dp(18), dp(82))
 
-        addContentView(nav, params)
-
-        nav.post {
-            val parentView = nav.parent as? android.view.View ?: return@post
-            val savedX = prefs.getInt("floating_nav_x", -1)
-            val savedY = prefs.getInt("floating_nav_y", -1)
-
-            val defaultX = (parentView.width - nav.width - dp(12)).coerceAtLeast(dp(8))
-            val defaultY = ((parentView.height * 0.55f).toInt()).coerceAtLeast(dp(120))
-
-            val targetX = if (savedX >= 0) savedX else defaultX
-            val targetY = if (savedY >= 0) savedY else defaultY
-
-            val layoutParams = nav.layoutParams as android.widget.FrameLayout.LayoutParams
-            layoutParams.leftMargin = clampPosition(targetX, dp(8), parentView.width - nav.width - dp(8))
-            layoutParams.topMargin = clampPosition(targetY, dp(80), parentView.height - nav.height - dp(96))
-            nav.layoutParams = layoutParams
-        }
-
-        var downRawX = 0f
-        var downRawY = 0f
-        var startLeft = 0
-        var startTop = 0
-        var moved = false
-
-        nav.setOnTouchListener { view, event ->
-            val parentView = view.parent as? android.view.View ?: return@setOnTouchListener false
-            val layoutParams = view.layoutParams as android.widget.FrameLayout.LayoutParams
-
-            when (event.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    downRawX = event.rawX
-                    downRawY = event.rawY
-                    startLeft = layoutParams.leftMargin
-                    startTop = layoutParams.topMargin
-                    moved = false
-                    true
-                }
-
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - downRawX).toInt()
-                    val dy = (event.rawY - downRawY).toInt()
-
-                    if (kotlin.math.abs(dx) > dp(3) || kotlin.math.abs(dy) > dp(3)) {
-                        moved = true
-                    }
-
-                    layoutParams.leftMargin = clampPosition(
-                        startLeft + dx,
-                        dp(8),
-                        parentView.width - view.width - dp(8)
-                    )
-                    layoutParams.topMargin = clampPosition(
-                        startTop + dy,
-                        dp(80),
-                        parentView.height - view.height - dp(100)
-                    )
-                    view.layoutParams = layoutParams
-                    true
-                }
-
-                android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL -> {
-                    prefs.edit()
-                        .putInt("floating_nav_x", layoutParams.leftMargin)
-                        .putInt("floating_nav_y", layoutParams.topMargin)
-                        .apply()
-
-                    if (!moved) {
-                        view.performClick()
-                    }
-                    true
-                }
-
-                else -> false
-            }
-        }
+        addContentView(bar, params)
     }
 
     private fun filterButton(label: String, mb: Int): Button {
@@ -2009,6 +1908,80 @@ class CleanupSimpleActivity : Activity() {
         return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(ms))
     }
 
+    private fun drawWidget() {
+        removeFloatingListNav()
+        currentCategory = ""
+        categoryDisplayLimit = 120
+        root.removeAllViews()
+
+        val title = TextView(this)
+        title.text = "Widget"
+        title.textSize = 28f
+        title.setTypeface(null, Typeface.BOLD)
+        title.setTextColor(Color.rgb(10, 18, 36))
+        root.addView(title)
+
+        val subtitle = TextView(this)
+        subtitle.text = "Acompanhe armazenamento e memória direto na tela inicial do celular."
+        subtitle.textSize = 15f
+        subtitle.setTextColor(Color.rgb(80, 90, 110))
+        subtitle.setPadding(0, dp(4), 0, dp(14))
+        root.addView(subtitle)
+
+        val mainCard = card()
+        mainCard.addView(titleText("Widget do Android"))
+
+        val mainText = TextView(this)
+        mainText.text =
+            "O widget serve para mostrar informações rápidas do aparelho sem precisar abrir o app.\n\n" +
+            "Ele pode ajudar a acompanhar armazenamento, memória RAM e acesso rápido à limpeza."
+        mainText.textSize = 16f
+        mainText.setTextColor(Color.rgb(70, 80, 100))
+        mainText.setPadding(0, dp(8), 0, dp(10))
+        mainCard.addView(mainText)
+
+        val widgetItems = TextView(this)
+        widgetItems.text =
+            "• Armazenamento usado e livre\n" +
+            "• Memória/RAM em uso\n" +
+            "• Acesso rápido à limpeza\n" +
+            "• Status geral do aparelho"
+        widgetItems.textSize = 15f
+        widgetItems.setTextColor(Color.rgb(45, 55, 75))
+        widgetItems.setPadding(0, dp(4), 0, 0)
+        mainCard.addView(widgetItems)
+
+        root.addView(mainCard)
+
+        val howCard = card()
+        howCard.addView(titleText("Como adicionar na tela inicial"))
+
+        val steps = TextView(this)
+        steps.text =
+            "1. Toque e segure em uma área vazia da tela inicial.\n" +
+            "2. Toque em Widgets.\n" +
+            "3. Procure este app na lista.\n" +
+            "4. Segure o widget e arraste para a tela inicial."
+        steps.textSize = 15f
+        steps.setTextColor(Color.rgb(70, 80, 100))
+        steps.setPadding(0, dp(8), 0, 0)
+        howCard.addView(steps)
+
+        root.addView(howCard)
+
+        val noteCard = card()
+        noteCard.addView(titleText("Observação"))
+
+        val note = TextView(this)
+        note.text = "Se o widget não aparecer ou não atualizar, remova e adicione novamente na tela inicial."
+        note.textSize = 14f
+        note.setTextColor(Color.rgb(80, 90, 110))
+        note.setPadding(0, dp(8), 0, 0)
+        noteCard.addView(note)
+
+        root.addView(noteCard)
+    }
+
     private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
@@ -2022,8 +1995,7 @@ class CleanupSimpleActivity : Activity() {
         })
 
         nav.addView(navItem("▦\nWidget", false) {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            drawWidget()
         })
 
         nav.addView(navItem("✦\nLimpeza", true) {
