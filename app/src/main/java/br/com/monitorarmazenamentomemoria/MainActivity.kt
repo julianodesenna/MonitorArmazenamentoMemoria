@@ -340,14 +340,26 @@ class MainActivity : Activity() {
     }
 
     private fun configCard(): LinearLayout {
-        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
+        val box = card(
+            if (isDark()) Color.rgb(15, 22, 42) else Color.WHITE,
+            if (isDark()) Color.rgb(68, 78, 118) else Color.rgb(218, 226, 240)
+        )
+        box.setPadding(dp(18), dp(18), dp(18), dp(18))
+
         val h = TextView(this)
-        h.text = "Cores e Limites"
-        h.textSize = 20f
+        h.text = "Alertas e limites"
+        h.textSize = 24f
         h.setTypeface(null, Typeface.BOLD)
         h.setTextColor(mainText())
-        h.setPadding(0, 0, 0, dp(14))
+        h.includeFontPadding = false
         box.addView(h)
+
+        val sub = TextView(this)
+        sub.text = "Arraste as barras ou use − e + para ajustar as faixas de aviso."
+        sub.textSize = 14f
+        sub.setTextColor(subText())
+        sub.setPadding(0, dp(6), 0, dp(16))
+        box.addView(sub)
 
         box.addView(limitRow("🟢 Verde até", greenLimit, 1, 95) {
             greenLimit = it
@@ -364,15 +376,85 @@ class MainActivity : Activity() {
             showConfigScreen()
         })
 
-        val red = TextView(this)
-        red.text = "🔴 Vermelho acima de ${yellowLimit + 1}%"
-        red.textSize = 17f
-        red.setTextColor(mainText())
-        red.setPadding(0, dp(12), 0, dp(12))
-        box.addView(red)
+        val redBox = LinearLayout(this)
+        redBox.orientation = LinearLayout.VERTICAL
+        redBox.setPadding(dp(14), dp(14), dp(14), dp(14))
+        redBox.background = rounded(
+            if (isDark()) Color.rgb(54, 25, 28) else Color.rgb(255, 244, 242),
+            Color.rgb(235, 67, 53),
+            dp(20)
+        )
+
+        val redTop = LinearLayout(this)
+        redTop.orientation = LinearLayout.HORIZONTAL
+        redTop.gravity = Gravity.CENTER_VERTICAL
+
+        val redTexts = LinearLayout(this)
+        redTexts.orientation = LinearLayout.VERTICAL
+
+        val redTitle = TextView(this)
+        redTitle.text = "🔴 Vermelho acima"
+        redTitle.textSize = 16f
+        redTitle.setTypeface(null, Typeface.BOLD)
+        redTitle.setTextColor(mainText())
+        redTitle.includeFontPadding = false
+        redTexts.addView(redTitle)
+
+        val redDesc = TextView(this)
+        redDesc.text = "Faixa crítica automática"
+        redDesc.textSize = 12f
+        redDesc.setTextColor(subText())
+        redDesc.setPadding(0, dp(4), 0, 0)
+        redTexts.addView(redDesc)
+
+        redTop.addView(redTexts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val redBadge = TextView(this)
+        redBadge.text = "${yellowLimit + 1}%"
+        redBadge.textSize = 20f
+        redBadge.setTypeface(null, Typeface.BOLD)
+        redBadge.gravity = Gravity.CENTER
+        redBadge.includeFontPadding = false
+        redBadge.setTextColor(Color.WHITE)
+        redBadge.setPadding(dp(14), 0, dp(14), 0)
+        redBadge.background = rounded(Color.rgb(235, 67, 53), Color.TRANSPARENT, dp(18))
+        redTop.addView(redBadge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(40)))
+
+        redBox.addView(redTop)
+
+        val redBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal)
+        redBar.max = 100
+        redBar.progress = (yellowLimit + 1).coerceIn(0, 100)
+        redBar.progressTintList = ColorStateList.valueOf(Color.rgb(235, 67, 53))
+        redBar.progressBackgroundTintList = ColorStateList.valueOf(
+            if (isDark()) Color.rgb(80, 44, 48) else Color.rgb(248, 218, 214)
+        )
+
+        val redBarParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(12)
+        )
+        redBarParams.setMargins(0, dp(14), 0, 0)
+        redBox.addView(redBar, redBarParams)
+
+        val redParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        redParams.setMargins(0, dp(10), 0, dp(14))
+        box.addView(redBox, redParams)
 
         val notificationButton = Button(this)
         notificationButton.text = if (notificationEnabled) "DESATIVAR MONITORAMENTO" else "ATIVAR MONITORAMENTO"
+        notificationButton.textSize = 13f
+        notificationButton.setTypeface(null, Typeface.BOLD)
+        notificationButton.isAllCaps = false
+        notificationButton.setTextColor(Color.WHITE)
+        notificationButton.background = rounded(
+            if (notificationEnabled) Color.rgb(235, 67, 53) else Color.rgb(42, 92, 255),
+            Color.TRANSPARENT,
+            dp(18)
+        )
         notificationButton.setOnClickListener {
             notificationEnabled = !notificationEnabled
             saveSettings()
@@ -380,77 +462,214 @@ class MainActivity : Activity() {
             showConfigScreen()
         }
         box.addView(notificationButton, buttonParams())
+
         return box
     }
 
     private fun themeCard(): LinearLayout {
-        val box = card(cardColor(), if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240))
+        val box = card(
+            cardColor(),
+            if (isDark()) Color.rgb(50, 60, 85) else Color.rgb(225, 230, 240)
+        )
+        box.setPadding(dp(18), dp(18), dp(18), dp(18))
+
         val h = TextView(this)
         h.text = "Tema"
-        h.textSize = 20f
+        h.textSize = 24f
         h.setTypeface(null, Typeface.BOLD)
         h.setTextColor(mainText())
+        h.includeFontPadding = false
         box.addView(h)
+
+        val sub = TextView(this)
+        sub.text = "Escolha a aparência do painel, widget e notificações."
+        sub.textSize = 14f
+        sub.setTextColor(subText())
+        sub.setPadding(0, dp(6), 0, dp(14))
+        box.addView(sub)
 
         val row = LinearLayout(this)
         row.orientation = LinearLayout.VERTICAL
-        row.setPadding(0, dp(12), 0, 0)
-
         row.addView(themeButton("Automático pelo sistema", "auto"))
         row.addView(themeButton("Claro", "light"))
         row.addView(themeButton("Escuro", "dark"))
+
         box.addView(row)
         return box
     }
 
     private fun themeButton(label: String, value: String): Button {
+        val active = themeMode == value
         return Button(this).apply {
-            text = if (themeMode == value) "✓ $label" else label
+            text = if (active) "✓ $label" else label
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            isAllCaps = false
+            setTextColor(if (active) Color.WHITE else mainText())
+            background = rounded(
+                if (active) Color.rgb(42, 92, 255) else if (isDark()) Color.rgb(24, 32, 54) else Color.rgb(248, 250, 253),
+                if (active) Color.TRANSPARENT else if (isDark()) Color.rgb(76, 86, 120) else Color.rgb(210, 220, 236),
+                dp(18)
+            )
             setOnClickListener {
                 themeMode = value
                 saveSettings()
                 MonitorWidgetProvider.updateAll(this@MainActivity)
                 showConfigScreen()
             }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(46)
+            ).apply {
+                setMargins(0, dp(6), 0, 0)
+            }
         }
     }
 
     private fun limitRow(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit): LinearLayout {
-        val container = LinearLayout(this)
-        container.orientation = LinearLayout.VERTICAL
-        container.setPadding(0, dp(8), 0, dp(8))
+        val isGreen = label.contains("Verde")
+        val accent = if (isGreen) Color.rgb(0, 200, 126) else Color.rgb(255, 193, 7)
+        val accentDark = if (isGreen) Color.rgb(0, 135, 88) else Color.rgb(155, 108, 0)
+        val softBg = if (isGreen) {
+            if (isDark()) Color.rgb(14, 48, 38) else Color.rgb(236, 255, 246)
+        } else {
+            if (isDark()) Color.rgb(58, 45, 17) else Color.rgb(255, 250, 232)
+        }
+        val softLine = if (isGreen) Color.rgb(0, 190, 120) else Color.rgb(245, 185, 38)
+
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(14), dp(14), dp(14), dp(14))
+        box.background = rounded(softBg, softLine, dp(20))
+
+        val top = LinearLayout(this)
+        top.orientation = LinearLayout.HORIZONTAL
+        top.gravity = Gravity.CENTER_VERTICAL
+
+        val texts = LinearLayout(this)
+        texts.orientation = LinearLayout.VERTICAL
 
         val title = TextView(this)
-        title.text = "$label: $value%"
-        title.textSize = 17f
+        title.text = label
+        title.textSize = 16f
         title.setTypeface(null, Typeface.BOLD)
         title.setTextColor(mainText())
-        container.addView(title)
+        title.includeFontPadding = false
+        texts.addView(title)
 
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        row.gravity = Gravity.CENTER_VERTICAL
+        val desc = TextView(this)
+        desc.text = "mín. $min% • máx. $max%"
+        desc.textSize = 12f
+        desc.setTextColor(subText())
+        desc.setPadding(0, dp(4), 0, 0)
+        texts.addView(desc)
 
-        val minus = Button(this)
-        minus.text = "−"
-        minus.setOnClickListener { if (value > min) onChange(value - 1) }
+        top.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        val number = TextView(this)
-        number.text = "$value%"
-        number.textSize = 20f
-        number.setTypeface(null, Typeface.BOLD)
-        number.gravity = Gravity.CENTER
-        number.setTextColor(mainText())
+        val valueBadge = TextView(this)
+        valueBadge.text = "$value%"
+        valueBadge.textSize = 21f
+        valueBadge.setTypeface(null, Typeface.BOLD)
+        valueBadge.gravity = Gravity.CENTER
+        valueBadge.includeFontPadding = false
+        valueBadge.setTextColor(Color.WHITE)
+        valueBadge.setPadding(dp(14), 0, dp(14), 0)
+        valueBadge.background = rounded(accentDark, Color.TRANSPARENT, dp(18))
+        top.addView(valueBadge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(40)))
 
-        val plus = Button(this)
-        plus.text = "+"
-        plus.setOnClickListener { if (value < max) onChange(value + 1) }
+        box.addView(top)
 
-        row.addView(minus, LinearLayout.LayoutParams(dp(70), LinearLayout.LayoutParams.WRAP_CONTENT))
-        row.addView(number, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(plus, LinearLayout.LayoutParams(dp(70), LinearLayout.LayoutParams.WRAP_CONTENT))
-        container.addView(row)
-        return container
+        val seek = SeekBar(this)
+        seek.max = (max - min).coerceAtLeast(1)
+        seek.progress = (value - min).coerceIn(0, seek.max)
+        seek.progressTintList = ColorStateList.valueOf(accent)
+        seek.thumbTintList = ColorStateList.valueOf(accentDark)
+        seek.progressBackgroundTintList = ColorStateList.valueOf(
+            if (isDark()) Color.rgb(58, 65, 86) else Color.rgb(226, 232, 242)
+        )
+
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val newValue = min + progress
+                valueBadge.text = "$newValue%"
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val newValue = min + (seekBar?.progress ?: 0)
+                if (newValue != value) onChange(newValue.coerceIn(min, max))
+            }
+        })
+
+        val seekParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(44)
+        )
+        seekParams.setMargins(0, dp(12), 0, dp(8))
+        box.addView(seek, seekParams)
+
+        val controls = LinearLayout(this)
+        controls.orientation = LinearLayout.HORIZONTAL
+        controls.gravity = Gravity.CENTER_VERTICAL
+
+        fun controlButton(textValue: String): TextView {
+            return TextView(this).apply {
+                text = textValue
+                textSize = 23f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(mainText())
+                background = rounded(
+                    if (isDark()) Color.rgb(24, 32, 54) else Color.WHITE,
+                    if (isDark()) Color.rgb(76, 86, 120) else Color.rgb(210, 220, 236),
+                    dp(16)
+                )
+                isClickable = true
+                isFocusable = true
+            }
+        }
+
+        val minus = controlButton("−")
+        val plus = controlButton("+")
+
+        minus.alpha = if (value <= min) 0.45f else 1f
+        plus.alpha = if (value >= max) 0.45f else 1f
+
+        minus.setOnClickListener {
+            if (value > min) onChange(value - 1)
+        }
+
+        plus.setOnClickListener {
+            if (value < max) onChange(value + 1)
+        }
+
+        val range = TextView(this)
+        range.text = "Arraste a barra ou use os botões"
+        range.textSize = 12f
+        range.gravity = Gravity.CENTER
+        range.setTextColor(subText())
+
+        val minusParams = LinearLayout.LayoutParams(dp(48), dp(42))
+        val plusParams = LinearLayout.LayoutParams(dp(48), dp(42))
+        val rangeParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        rangeParams.setMargins(dp(10), 0, dp(10), 0)
+
+        controls.addView(minus, minusParams)
+        controls.addView(range, rangeParams)
+        controls.addView(plus, plusParams)
+
+        box.addView(controls)
+
+        val params = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        params.setMargins(0, dp(10), 0, 0)
+        box.layoutParams = params
+
+        return box
     }
 
     private fun showWidgetScreen() {
