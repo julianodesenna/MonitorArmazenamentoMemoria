@@ -333,8 +333,37 @@ class CleanupSimpleActivity : Activity() {
         row.addView(androidStorage, storageParams)
         actions.addView(row)
 
-        val accessFiles = premiumActionButton("Acesso aos arquivos liberado", false) {
-            Toast.makeText(this, "Permissão de arquivos já liberada", Toast.LENGTH_SHORT).show()
+        val hasFileAccess = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+
+        val accessFiles = premiumActionButton(
+            if (hasFileAccess) "Acesso aos arquivos liberado" else "Liberar acesso aos arquivos",
+            false
+        ) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R &&
+                !android.os.Environment.isExternalStorageManager()
+            ) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    Toast.makeText(this, "Ative o acesso a todos os arquivos e volte ao app", Toast.LENGTH_LONG).show()
+                } catch (_: Exception) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        Toast.makeText(this, "Ative o acesso a todos os arquivos e volte ao app", Toast.LENGTH_LONG).show()
+                    } catch (_: Exception) {
+                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                    }
+                }
+            } else {
+                scanFiles()
+                Toast.makeText(this, "Analisando arquivos novamente", Toast.LENGTH_SHORT).show()
+            }
         }
 
         val accessParams = LinearLayout.LayoutParams(
