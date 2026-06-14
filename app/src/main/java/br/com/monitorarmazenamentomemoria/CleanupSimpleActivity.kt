@@ -1,9 +1,11 @@
 package br.com.monitorarmazenamentomemoria
+import android.content.pm.PackageInstaller
 import androidx.core.content.FileProvider
 import android.content.ActivityNotFoundException
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
 import android.os.Build
 import android.net.Uri
 import android.content.pm.PackageManager
@@ -348,7 +350,7 @@ class CleanupSimpleActivity : Activity() {
             ) {
                 try {
                     val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        setData(Uri.parse("package:$packageName"))
+                        setData(Uri.fromParts("package", packageName, null))
                     }
                     startActivity(intent)
                     Toast.makeText(this, "Ative o acesso a todos os arquivos e volte ao app", Toast.LENGTH_LONG).show()
@@ -390,8 +392,7 @@ class CleanupSimpleActivity : Activity() {
         addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
         addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
         addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
-        addCategoryRow("⚠", "Sensíveis", "Arquivos que exigem cuidado", "↓", "Downloads", "Arquivos baixados")
-        addCategorySingleRow("◇", "APKs", "Instaladores antigos")
+        addCategoryRow("▦", "Aplicativos", "Apps instalados no aparelho", "◇", "APKs", "Instaladores antigos")
     }
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
@@ -1096,6 +1097,7 @@ class CleanupSimpleActivity : Activity() {
             type.contains("imagem") || type.contains("foto") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") -> "🖼"
             type.contains("pdf") || name.endsWith(".pdf") -> "PDF"
             type.contains("áudio") || type.contains("audio") || name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".ogg") || name.endsWith(".opus") || name.endsWith(".aac") -> "♪"
+            type.contains("aplicativo") || path.startsWith("app:") -> "APP"
             type.contains("apk") || name.endsWith(".apk") -> "APK"
             type.contains("backup") || path.contains("backup") || name.contains("msgstore") || name.contains(".crypt") -> "▣"
             name.endsWith(".zip") || name.endsWith(".rar") || name.endsWith(".7z") -> "ZIP"
@@ -1138,6 +1140,11 @@ class CleanupSimpleActivity : Activity() {
         }
 
         fun openThisFile() {
+            if (isAppItem(item)) {
+                launchInstalledApp(item)
+                return
+            }
+
             Toast.makeText(this, "Abrindo arquivo...", Toast.LENGTH_SHORT).show()
             window.decorView.post {
                 openFile(item)
@@ -1270,12 +1277,20 @@ class CleanupSimpleActivity : Activity() {
         actionRow.orientation = LinearLayout.HORIZONTAL
         actionRow.setPadding(0, dp(10), 0, 0)
 
-        val openButton = openActionButton("Abrir arquivo", true) {
-            openThisFile()
+        val openButton = openActionButton(if (isAppItem(item)) "Abrir app" else "Abrir arquivo", true) {
+            if (isAppItem(item)) {
+                launchInstalledApp(item)
+            } else {
+                openThisFile()
+            }
         }
 
-        val detailsButton = openActionButton("Detalhes", false) {
-            showFileDetails()
+        val detailsButton = openActionButton(if (isAppItem(item)) "Desinstalar" else "Detalhes", false) {
+            if (isAppItem(item)) {
+                confirmUninstallApp(item)
+            } else {
+                showFileDetails()
+            }
         }
 
         val openParams = LinearLayout.LayoutParams(
@@ -1307,9 +1322,40 @@ class CleanupSimpleActivity : Activity() {
 
 
 
-    private fun updateSelectedInfo() {
+    
+
+private fun selectedItemsForActions(): List<FileItem> {
+    if (selectedFiles.isEmpty()) return emptyList()
+
+    val selectedSet = selectedFiles.toSet()
+    val result = mutableListOf<FileItem>()
+
+    try {
+        if (currentCategory.isNotBlank()) {
+            result.addAll(categoryFiles(currentCategory).filter { selectedSet.contains(it.path) })
+        }
+    } catch (_: Exception) {
+    }
+
+    try {
+        result.addAll(allFiles.filter { selectedSet.contains(it.path) })
+    } catch (_: Exception) {
+    }
+
+    try {
+        val appPaths = selectedSet.filter { it.startsWith("app:") }
+        if (appPaths.isNotEmpty()) {
+            result.addAll(installedAppItems().filter { appPaths.contains(it.path) })
+        }
+    } catch (_: Exception) {
+    }
+
+    return result.distinctBy { it.path }
+}
+
+private fun updateSelectedInfo() {
         if (::selectedInfoText.isInitialized) {
-            val selected = allFiles.filter { selectedFiles.contains(it.path) }
+            val selected = selectedItemsForActions()
             selectedInfoText.text = "${selected.size} selecionados • ${formatSize(selected.sumOf { it.size })}"
         }
         val clearButton = root.findViewWithTag<android.view.View>("cleanup_clear_selection_button")
@@ -1323,7 +1369,7 @@ class CleanupSimpleActivity : Activity() {
             return
         }
 
-        val items = allFiles.filter { selectedFiles.contains(it.path) }
+        val items = selectedItemsForActions()
         val existingFiles = items.map { File(it.path) }.filter { it.exists() && it.isFile }
 
         if (existingFiles.isEmpty()) {
@@ -1374,54 +1420,71 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun confirmDeleteSelectedFiles() {
-        if (selectedFiles.isEmpty()) {
-            Toast.makeText(this, "Nenhum arquivo selecionado", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val items = allFiles.filter { selectedFiles.contains(it.path) }
-
-        if (items.isEmpty()) {
-            selectedFiles.clear()
-            updateSelectedInfo()
-            Toast.makeText(this, "A seleção não foi encontrada na lista atual", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val totalSize = items.sumOf { it.size }
-        val sensitive = items.filter { it.risk == "alto" }
-
-        val message = buildString {
-            append("Arquivos selecionados: ${items.size}\n")
-            append("Espaço estimado: ${formatSize(totalSize)}\n\n")
-            append("Essa ação tentará apagar os arquivos selecionados do aparelho.\n")
-            append("Depois de apagados, eles podem não ser recuperáveis.\n\n")
-
-            if (sensitive.isNotEmpty()) {
-                append("ATENÇÃO: ${sensitive.size} arquivo(s) sensível(eis) selecionado(s).\n")
-                append("Podem conter conversas, backups, documentos, bancos de dados, senhas ou dados importantes.\n\n")
-                append("Exemplos:\n")
-                sensitive.take(5).forEach { append("• ${it.name}\n") }
-                if (sensitive.size > 5) append("• ...\n")
-                append("\n")
-            }
-
-            append("Deseja continuar?")
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(if (sensitive.isNotEmpty()) "Confirmar exclusão sensível" else "Confirmar exclusão")
-            .setMessage(message)
-            .setPositiveButton("Excluir") { _, _ ->
-                if (sensitive.isNotEmpty()) {
-                    confirmSensitiveDelete(items, sensitive.size)
-                } else {
-                    deleteFilesNow(items)
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
+    if (selectedFiles.isEmpty()) {
+        Toast.makeText(this, "Nenhum arquivo selecionado", Toast.LENGTH_SHORT).show()
+        return
     }
+
+    val items = selectedItemsForActions()
+
+    if (items.isEmpty()) {
+        selectedFiles.clear()
+        updateSelectedInfo()
+        Toast.makeText(this, "A seleção não foi encontrada na lista atual", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val appItems = items.filter { isAppItem(it) }
+    if (appItems.isNotEmpty()) {
+        if (appItems.size == 1) {
+            confirmUninstallApp(appItems.first())
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Aplicativos selecionados")
+                .setMessage(
+                    "O Android não permite desinstalar vários aplicativos de uma vez por aqui.\n\n" +
+                    "Selecione apenas um aplicativo por vez e toque em Excluir."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        return
+    }
+
+    val totalSize = items.sumOf { it.size }
+    val sensitive = items.filter { it.risk == "alto" }
+
+    val message = buildString {
+        append("Arquivos selecionados: ${items.size}\n")
+        append("Espaço estimado: ${formatSize(totalSize)}\n\n")
+        append("Essa ação tentará apagar os arquivos selecionados do aparelho.\n")
+        append("Depois de apagados, eles podem não ser recuperáveis.\n\n")
+
+        if (sensitive.isNotEmpty()) {
+            append("ATENÇÃO: ${sensitive.size} arquivo(s) sensível(eis) selecionado(s).\n")
+            append("Podem conter conversas, backups, documentos, bancos de dados, senhas ou dados importantes.\n\n")
+            append("Exemplos:\n")
+            sensitive.take(5).forEach { append("• ${it.name}\n") }
+            if (sensitive.size > 5) append("• ...\n")
+            append("\n")
+        }
+
+        append("Deseja continuar?")
+    }
+
+    AlertDialog.Builder(this)
+        .setTitle(if (sensitive.isNotEmpty()) "Confirmar exclusão sensível" else "Confirmar exclusão")
+        .setMessage(message)
+        .setPositiveButton("Excluir") { _, _ ->
+            if (sensitive.isNotEmpty()) {
+                confirmSensitiveDelete(items, sensitive.size)
+            } else {
+                deleteFilesNow(items)
+            }
+        }
+        .setNegativeButton("Cancelar", null)
+        .show()
+}
 
     private fun confirmSensitiveDelete(items: List<FileItem>, sensitiveCount: Int) {
         AlertDialog.Builder(this)
@@ -1507,7 +1570,7 @@ class CleanupSimpleActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val intent = Intent(
                     Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:$packageName")
+                    Uri.fromParts("package", packageName, null)
                 )
                 startActivity(intent)
             } else {
@@ -1538,7 +1601,16 @@ class CleanupSimpleActivity : Activity() {
         }
     }
 
-    override fun onResume() {
+    
+override fun onNewIntent(intent: Intent?) {
+    super.onNewIntent(intent)
+
+    if (intent?.action == "br.com.monitorarmazenamentomemoria.UNINSTALL_RESULT") {
+        handleUninstallResult(intent)
+    }
+}
+
+override fun onResume() {
         super.onResume()
         if (::root.isInitialized && hasStorageAccess()) {
             scanFiles()
@@ -1623,7 +1695,277 @@ class CleanupSimpleActivity : Activity() {
     }
 
 
-    private fun openFile(item: FileItem) {
+    
+
+private fun appPackage(item: FileItem): String {
+    return item.path.removePrefix("app:")
+}
+
+private fun isSystemAppItem(item: FileItem): Boolean {
+    val t = item.type.lowercase(Locale.ROOT)
+    return t.contains("aplicativo • sistema") || t.contains("sistema atualizado")
+}
+
+private fun sensitiveAppTag(appName: String, packageName: String): String? {
+    val text = (appName + " " + packageName).lowercase(Locale.ROOT)
+
+    return when {
+        listOf("nubank", "banco", "bank", "caixa", "bradesco", "itau", "itaú", "santander", "inter", "picpay", "mercadopago", "paypal", "pagbank", "c6bank").any { text.contains(it) } ->
+            "SENSÍVEL: financeiro"
+
+        listOf("gov", "gov.br", "receita", "detran", "inss", "fgts", "serpro").any { text.contains(it) } ->
+            "SENSÍVEL: governo/documentos"
+
+        listOf("authenticator", "autenticador", "auth", "otp", "2fa", "duo").any { text.contains(it) } ->
+            "SENSÍVEL: autenticação"
+
+        listOf("whatsapp", "telegram", "signal", "gmail", "outlook", "instagram", "facebook").any { text.contains(it) } ->
+            "SENSÍVEL: conversas/contas"
+
+        listOf("drive", "onedrive", "dropbox", "mega", "photos", "fotos").any { text.contains(it) } ->
+            "SENSÍVEL: nuvem/arquivos"
+
+        else -> null
+    }
+}
+
+
+private fun launchInstalledApp(item: FileItem) {
+    val packageName = appPackage(item)
+
+    try {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launchIntent)
+            return
+        }
+
+        Toast.makeText(this, "Este app não possui tela inicial. Abrindo detalhes.", Toast.LENGTH_LONG).show()
+        openAppDetails(packageName)
+    } catch (_: Exception) {
+        Toast.makeText(this, "Não foi possível abrir este aplicativo. Abrindo detalhes.", Toast.LENGTH_LONG).show()
+        openAppDetails(packageName)
+    }
+}
+
+private fun openAppDetails(packageName: String) {
+    try {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            setData(Uri.fromParts("package", packageName, null))
+        }
+        startActivity(intent)
+    } catch (_: Exception) {
+        startActivity(Intent(Settings.ACTION_SETTINGS))
+    }
+}
+
+
+
+
+
+
+
+private fun handleUninstallResult(intent: Intent?) {
+    try {
+        if (intent == null) {
+            Toast.makeText(this, "Retorno de desinstalação vazio.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val status = intent.getIntExtra(
+            PackageInstaller.EXTRA_STATUS,
+            PackageInstaller.STATUS_FAILURE
+        )
+
+        when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                val confirmIntent = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+
+                if (confirmIntent != null) {
+                    try {
+                        startActivity(confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) {
+                        Toast.makeText(this, "O Android bloqueou a tela de confirmação da desinstalação.", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    Toast.makeText(this, "O Android pediu confirmação, mas não retornou a tela para abrir.", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            PackageInstaller.STATUS_SUCCESS -> {
+                Toast.makeText(this, "Aplicativo desinstalado.", Toast.LENGTH_LONG).show()
+                selectedFiles.clear()
+                updateSelectedInfo()
+                if (currentCategory.isNotBlank()) {
+                    showCategory(currentCategory, "")
+                }
+            }
+
+            else -> {
+                val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    ?: "Não foi possível desinstalar este aplicativo."
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            }
+        }
+    } catch (_: Exception) {
+        Toast.makeText(this, "Não foi possível concluir a desinstalação.", Toast.LENGTH_LONG).show()
+    }
+}
+
+private fun launchAndroidUninstall(packageName: String) {
+    try {
+        val callbackIntent = Intent(this, CleanupSimpleActivity::class.java).apply {
+            action = "br.com.monitorarmazenamentomemoria.UNINSTALL_RESULT"
+            putExtra("uninstall_package", packageName)
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+
+        val sender = PendingIntent.getActivity(
+            this,
+            packageName.hashCode(),
+            callbackIntent,
+            flags
+        ).intentSender
+
+        packageManager.packageInstaller.uninstall(packageName, sender)
+        return
+    } catch (_: Exception) {
+    }
+
+    try {
+        val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply {
+            data = Uri.fromParts("package", packageName, null)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
+        }
+        startActivity(intent)
+        return
+    } catch (_: Exception) {
+    }
+
+    try {
+        val intent = Intent(Intent.ACTION_DELETE).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+        startActivity(intent)
+        return
+    } catch (_: Exception) {
+    }
+
+    openAppDetails(packageName)
+}
+
+private fun confirmUninstallApp(item: FileItem) {
+    val packageName = appPackage(item)
+    val tag = sensitiveAppTag(item.name, packageName)
+
+    if (isSystemAppItem(item)) {
+        AlertDialog.Builder(this)
+            .setTitle("App do sistema")
+            .setMessage(
+                "Este aplicativo parece ser do sistema ou protegido pelo fabricante.\n\n" +
+                "O Android normalmente não permite desinstalar diretamente.\n\n" +
+                "Você pode abrir os detalhes oficiais para desativar, limpar dados ou remover atualizações, se o Android permitir."
+            )
+            .setPositiveButton("ABRIR DETALHES") { _, _ ->
+                openAppDetails(packageName)
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+        return
+    }
+
+    if (tag != null) {
+        AlertDialog.Builder(this)
+            .setTitle("Aplicativo sensível")
+            .setMessage(
+                "Atenção: ${item.name}\n\n" +
+                "$tag\n\n" +
+                "Desinstalar este app pode remover acesso, dados, notificações, contas ou configurações importantes.\n\n" +
+                "Deseja continuar?"
+            )
+            .setPositiveButton("CONTINUAR") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Última confirmação")
+                    .setMessage(
+                        "Confirme novamente:\n\n" +
+                        "Você realmente quer iniciar a desinstalação de ${item.name}?\n\n" +
+                        "Depois disso, o Android pode mostrar a confirmação oficial."
+                    )
+                    .setPositiveButton("SIM, DESINSTALAR") { _, _ ->
+                        launchAndroidUninstall(packageName)
+                    }
+                    .setNegativeButton("CANCELAR", null)
+                    .show()
+            }
+            .setNegativeButton("CANCELAR", null)
+            .show()
+        return
+    }
+
+    AlertDialog.Builder(this)
+        .setTitle("Confirmar desinstalação")
+        .setMessage(
+            "Aplicativo: ${item.name}\n" +
+            "Pacote: $packageName\n\n" +
+            "Deseja iniciar a desinstalação deste aplicativo?"
+        )
+        .setPositiveButton("DESINSTALAR") { _, _ ->
+            launchAndroidUninstall(packageName)
+        }
+        .setNegativeButton("CANCELAR", null)
+        .show()
+}
+
+private fun showAppOptions(item: FileItem) {
+    val packageName = appPackage(item)
+    val tag = sensitiveAppTag(item.name, packageName)
+    val systemApp = isSystemAppItem(item)
+
+    val message = buildString {
+        append("Pacote: ")
+        append(packageName)
+
+        if (tag != null) {
+            append("\n\n")
+            append(tag)
+        }
+
+        if (systemApp) {
+            append("\n\nApp do sistema: desinstalação direta bloqueada pelo Android.")
+        }
+
+        append("\n\nEscolha uma ação:")
+    }
+
+    val builder = android.app.AlertDialog.Builder(this)
+        .setTitle(item.name)
+        .setMessage(message)
+        .setPositiveButton("DETALHES DO APP") { _, _ ->
+            openAppDetails(packageName)
+        }
+        .setNegativeButton("CANCELAR", null)
+
+    if (!systemApp) {
+        builder.setNeutralButton("DESINSTALAR") { _, _ ->
+            confirmUninstallApp(item)
+        }
+    }
+
+    builder.show()
+}
+
+
+
+private fun openFile(item: FileItem) {
+        if (isAppItem(item)) {
+      showAppOptions(item)
+      return
+  }
+
         try {
             val originalFile = File(item.path)
 
@@ -1846,10 +2188,98 @@ class CleanupSimpleActivity : Activity() {
         )
     }
 
-    private fun categoryFiles(category: String): List<FileItem> {
+    private fun isAppItem(item: FileItem): Boolean {
+        return item.path.startsWith("app:")
+    }
+
+    private fun installedAppItems(): List<FileItem> {
+    return try {
+        @Suppress("DEPRECATION")
+        val packages = packageManager.getInstalledPackages(0)
+
+        packages.mapNotNull { pkg ->
+            val appInfo = pkg.applicationInfo ?: return@mapNotNull null
+
+            val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+            val isUpdatedSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+
+            val appKind = when {
+                isSystem && !isUpdatedSystem -> "sistema"
+                isUpdatedSystem -> "sistema atualizado"
+                else -> "baixado"
+            }
+
+            val appName = try {
+                appInfo.loadLabel(packageManager).toString()
+            } catch (_: Exception) {
+                pkg.packageName
+            }
+
+            val sourceFiles = mutableListOf<File>()
+
+            try {
+                val src = appInfo.sourceDir
+                if (!src.isNullOrBlank()) sourceFiles.add(File(src))
+            } catch (_: Exception) {
+            }
+
+            try {
+                val pub = appInfo.publicSourceDir
+                if (!pub.isNullOrBlank()) sourceFiles.add(File(pub))
+            } catch (_: Exception) {
+            }
+
+            try {
+                appInfo.splitSourceDirs?.forEach { split ->
+                    if (!split.isNullOrBlank()) sourceFiles.add(File(split))
+                }
+            } catch (_: Exception) {
+            }
+
+            val size = sourceFiles
+                .distinctBy { it.absolutePath }
+                .sumOf { f -> if (f.exists() && f.isFile) f.length() else 0L }
+
+            val version = pkg.versionName ?: "versão não informada"
+            val sensitiveTag = sensitiveAppTag(appName, pkg.packageName)
+
+            val typeText = if (sensitiveTag != null) {
+                "Aplicativo • $appKind • $sensitiveTag • versão $version • pacote ${pkg.packageName}"
+            } else {
+                "Aplicativo • $appKind • versão $version • pacote ${pkg.packageName}"
+            }
+
+            val riskLevel = if (sensitiveTag != null) "alto" else "normal"
+
+            FileItem(
+                name = appName,
+                path = "app:${pkg.packageName}",
+                size = size,
+                modified = pkg.lastUpdateTime,
+                type = typeText,
+                category = "Aplicativos",
+                risk = riskLevel
+            )
+        }.sortedWith(
+            compareBy<FileItem> {
+                when {
+                    it.type.contains("Aplicativo • baixado") -> 0
+                    it.type.contains("sistema atualizado") -> 1
+                    else -> 2
+                }
+            }.thenByDescending { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+    
+private fun categoryFiles(category: String): List<FileItem> {
         val minBytes = minSizeMb.toLong() * 1024L * 1024L
 
         return when (category) {
+            "Aplicativos" -> installedAppItems()
             "Novos nas últimas 24h" -> allFiles.filter { isLast24Hours(it) }
 
             "Arquivos grandes" -> allFiles.filter { it.size >= minBytes }
@@ -1859,7 +2289,6 @@ class CleanupSimpleActivity : Activity() {
             "WhatsApp" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("whatsapp") }
             "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" }
             "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
-            "Sensíveis" -> allFiles.filter { it.risk == "alto" }
             "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
             "APKs" -> allFiles.filter { it.category == "APKs" }
             "Fotos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isImageName(it.name) }
@@ -2052,7 +2481,7 @@ class CleanupSimpleActivity : Activity() {
         openSettings.setOnClickListener {
             try {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    setData(Uri.parse("package:$packageName"))
+                    setData(Uri.fromParts("package", packageName, null))
                 }
                 startActivity(intent)
             } catch (_: Exception) {
