@@ -348,7 +348,7 @@ class CleanupSimpleActivity : Activity() {
             ) {
                 try {
                     val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        data = Uri.parse("package:$packageName")
+                        setData(Uri.parse("package:$packageName"))
                     }
                     startActivity(intent)
                     Toast.makeText(this, "Ative o acesso a todos os arquivos e volte ao app", Toast.LENGTH_LONG).show()
@@ -2052,7 +2052,7 @@ class CleanupSimpleActivity : Activity() {
         openSettings.setOnClickListener {
             try {
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.parse("package:$packageName")
+                    setData(Uri.parse("package:$packageName"))
                 }
                 startActivity(intent)
             } catch (_: Exception) {
