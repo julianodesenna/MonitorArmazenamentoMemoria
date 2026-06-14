@@ -1827,6 +1827,77 @@ class CleanupSimpleActivity : Activity() {
         return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date(ms))
     }
 
+    private fun drawConfig() {
+        removeFloatingListNav()
+        currentCategory = ""
+        categoryDisplayLimit = 120
+        root.removeAllViews()
+
+        val title = TextView(this)
+        title.text = "Configurações"
+        title.textSize = 28f
+        title.setTypeface(null, Typeface.BOLD)
+        title.setTextColor(Color.rgb(10, 18, 36))
+        root.addView(title)
+
+        val subtitle = TextView(this)
+        subtitle.text = "Ajustes e informações do aplicativo."
+        subtitle.textSize = 15f
+        subtitle.setTextColor(Color.rgb(80, 90, 110))
+        subtitle.setPadding(0, dp(4), 0, dp(14))
+        root.addView(subtitle)
+
+        val appCard = card()
+        appCard.addView(titleText("Aplicativo"))
+
+        val appText = TextView(this)
+        appText.text =
+            "Use esta área para acessar ajustes do Android relacionados ao app, permissões e armazenamento."
+        appText.textSize = 15f
+        appText.setTextColor(Color.rgb(70, 80, 100))
+        appText.setPadding(0, dp(8), 0, dp(12))
+        appCard.addView(appText)
+
+        val openSettings = Button(this)
+        openSettings.text = "CONFIGURAÇÕES DO APP"
+        openSettings.setOnClickListener {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+        appCard.addView(openSettings)
+
+        root.addView(appCard)
+
+        val storageCard = card()
+        storageCard.addView(titleText("Armazenamento"))
+
+        val storageText = TextView(this)
+        storageText.text = "Abra as configurações de armazenamento do Android para conferir o uso geral do aparelho."
+        storageText.textSize = 15f
+        storageText.setTextColor(Color.rgb(70, 80, 100))
+        storageText.setPadding(0, dp(8), 0, dp(12))
+        storageCard.addView(storageText)
+
+        val openStorage = Button(this)
+        openStorage.text = "ARMAZENAMENTO DO ANDROID"
+        openStorage.setOnClickListener {
+            try {
+                startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+        storageCard.addView(openStorage)
+
+        root.addView(storageCard)
+    }
+
     private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
@@ -1844,9 +1915,9 @@ class CleanupSimpleActivity : Activity() {
         })
 
         nav.addView(navItem("⚙\nConfig.", false) {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            drawConfig()
         })
+
 
         nav.addView(navItem("↑", false) {
             val scrollView = root.parent as? android.widget.ScrollView
@@ -1861,20 +1932,53 @@ class CleanupSimpleActivity : Activity() {
                 scrollView.smoothScrollTo(0, root.height)
             }
         })
-
         return nav
     }
 
     private fun navItem(textValue: String, active: Boolean, action: () -> Unit): TextView {
+        val isArrow = textValue == "↑" || textValue == "↓"
+
         return TextView(this).apply {
             text = textValue
-            textSize = 11f
             gravity = Gravity.CENTER
-            setTextColor(if (active) Color.rgb(42, 92, 255) else Color.rgb(80, 90, 110))
-            setPadding(dp(4), dp(4), dp(4), dp(6))
-            if (active) background = rounded(Color.rgb(232, 245, 255), Color.TRANSPARENT, dp(16))
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            includeFontPadding = false
+            textSize = if (isArrow) 24f else 12f
+            setTypeface(null, if (active || isArrow) Typeface.BOLD else Typeface.NORMAL)
+            setTextColor(
+                if (isArrow) {
+                    Color.rgb(14, 26, 56)
+                } else if (active) {
+                    Color.rgb(42, 92, 255)
+                } else {
+                    Color.rgb(80, 90, 110)
+                }
+            )
+            setPadding(0, dp(6), 0, dp(6))
+            background = when {
+                active -> rounded(
+                    Color.rgb(230, 244, 255),
+                    Color.TRANSPARENT,
+                    dp(18)
+                )
+                isArrow -> rounded(
+                    Color.rgb(248, 250, 253),
+                    Color.rgb(180, 190, 210),
+                    dp(18)
+                )
+                else -> null
+            }
+            isClickable = true
+            isFocusable = true
+            minHeight = dp(54)
             setOnClickListener { action() }
+
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                dp(58),
+                if (isArrow) 0.72f else 1f
+            ).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            }
         }
     }
 
