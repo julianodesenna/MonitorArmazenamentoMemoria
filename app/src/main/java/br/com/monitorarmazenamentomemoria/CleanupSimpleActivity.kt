@@ -384,14 +384,15 @@ class CleanupSimpleActivity : Activity() {
         root.addView(categoriesTitle)
 
         addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Últimos modificados", "Arquivos alterados mais recentemente")
-        addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
-        addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
+        addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Todos os vídeos encontrados")
+        addCategoryRow("▧", "Imagens", "Fotos e imagens encontradas", "♫", "Áudios", "Músicas, áudios e mensagens de voz")
+        addCategoryRow("📄", "Documentos", "PDFs, planilhas, textos e compactados", "↓", "Downloads", "Arquivos baixados")
+        addCategoryRow("▦", "Aplicativos", "Apps instalados e tamanho base", "♻", "Lixeira", "Arquivos em lixeiras encontradas")
         addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
         addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
         addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
         addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
-        addCategoryRow("⚠", "Sensíveis", "Arquivos que exigem cuidado", "↓", "Downloads", "Arquivos baixados")
-        addCategorySingleRow("◇", "APKs", "Instaladores antigos")
+        addCategoryRow("⚠", "Sensíveis", "Arquivos que exigem cuidado", "◇", "APKs", "Instaladores antigos")
     }
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
@@ -1096,6 +1097,7 @@ class CleanupSimpleActivity : Activity() {
             type.contains("imagem") || type.contains("foto") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") -> "🖼"
             type.contains("pdf") || name.endsWith(".pdf") -> "PDF"
             type.contains("áudio") || type.contains("audio") || name.endsWith(".mp3") || name.endsWith(".m4a") || name.endsWith(".ogg") || name.endsWith(".opus") || name.endsWith(".aac") -> "♪"
+            type.contains("aplicativo") || path.startsWith("app:") -> "APP"
             type.contains("apk") || name.endsWith(".apk") -> "APK"
             type.contains("backup") || path.contains("backup") || name.contains("msgstore") || name.contains(".crypt") -> "▣"
             name.endsWith(".zip") || name.endsWith(".rar") || name.endsWith(".7z") -> "ZIP"
@@ -1309,7 +1311,11 @@ class CleanupSimpleActivity : Activity() {
 
     private fun updateSelectedInfo() {
         if (::selectedInfoText.isInitialized) {
-            val selected = allFiles.filter { selectedFiles.contains(it.path) }
+            val selected = if (currentCategory == "Aplicativos") {
+                categoryFiles(currentCategory).filter { selectedFiles.contains(it.path) }
+            } else {
+                allFiles.filter { selectedFiles.contains(it.path) }
+            }
             selectedInfoText.text = "${selected.size} selecionados • ${formatSize(selected.sumOf { it.size })}"
         }
         val clearButton = root.findViewWithTag<android.view.View>("cleanup_clear_selection_button")
@@ -1624,6 +1630,19 @@ class CleanupSimpleActivity : Activity() {
 
 
     private fun openFile(item: FileItem) {
+        if (isAppItem(item)) {
+            try {
+                val pkg = item.path.removePrefix("app:")
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    setData(Uri.parse("package:$pkg"))
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+            return
+        }
+
         try {
             val originalFile = File(item.path)
 
@@ -1740,7 +1759,15 @@ class CleanupSimpleActivity : Activity() {
 
                     try {
                         if (f.isDirectory) {
-                            if (!f.name.startsWith(".")) scan(f, depth + 1)
+                            val folderName = f.name.lowercase(Locale.ROOT)
+                            val folderPath = f.absolutePath.lowercase(Locale.ROOT).replace("\\", "/")
+                            val hiddenTrash = folderName.contains("trash") ||
+                                folderName.contains("lixeira") ||
+                                folderPath.contains("/.trash") ||
+                                folderPath.contains("/.trashed") ||
+                                folderPath.contains("/recycle") ||
+                                folderPath.contains("/recycler")
+                            if (!f.name.startsWith(".") || hiddenTrash) scan(f, depth + 1)
                         } else {
                             result.add(
                                 FileItem(
@@ -1774,23 +1801,44 @@ class CleanupSimpleActivity : Activity() {
     private fun importantRoots(): List<File> {
         val base = Environment.getExternalStorageDirectory()
         return listOf(
-            File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents"),
-            File(base, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents/Sent"),
-            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents"),
-            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media/WhatsApp Business Documents/Sent"),
-            File(base, "WhatsApp/Media/WhatsApp Documents"),
-            File(base, "WhatsApp/Media/WhatsApp Documents/Sent"),
+            base,
             File(base, "Download"),
             File(base, "Downloads"),
             File(base, "Documents"),
+            File(base, "Documentos"),
             File(base, "DCIM"),
             File(base, "Movies"),
             File(base, "Pictures"),
+            File(base, "Music"),
+            File(base, "Audio"),
+            File(base, "Video"),
+            File(base, "Videos"),
+            File(base, "Telegram"),
+            File(base, "Telegram/Telegram Video"),
+            File(base, "Telegram/Telegram Audio"),
+            File(base, "Telegram/Telegram Documents"),
+            File(base, "Telegram/Telegram Images"),
             File(base, "WhatsApp"),
-            File(base, "Android/media/com.whatsapp"),
-            File(base, "Android/media/com.whatsapp.w4b"),
+            File(base, "WhatsApp/Media"),
+            File(base, "WhatsApp/Databases"),
+            File(base, "WhatsApp Business"),
             File(base, "Android/media"),
-            base
+            File(base, "Android/media/com.whatsapp"),
+            File(base, "Android/media/com.whatsapp/WhatsApp"),
+            File(base, "Android/media/com.whatsapp/WhatsApp/Media"),
+            File(base, "Android/media/com.whatsapp/WhatsApp/Databases"),
+            File(base, "Android/media/com.whatsapp.w4b"),
+            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business"),
+            File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media"),
+            File(base, "Android/media/org.telegram.messenger"),
+            File(base, "Android/media/org.telegram.messenger/Telegram"),
+            File(base, ".Trash"),
+            File(base, ".trash"),
+            File(base, ".trashed"),
+            File(base, "Trash"),
+            File(base, "Lixeira"),
+            File(base, "Recycle Bin"),
+            File(base, "Recycler")
         ).distinctBy { it.absolutePath }
     }
 
@@ -1804,17 +1852,44 @@ class CleanupSimpleActivity : Activity() {
 
     private fun isImageName(name: String): Boolean {
         val n = name.lowercase(Locale.ROOT)
-        return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") || n.endsWith(".gif")
+        return n.endsWith(".jpg") ||
+            n.endsWith(".jpeg") ||
+            n.endsWith(".png") ||
+            n.endsWith(".webp") ||
+            n.endsWith(".gif") ||
+            n.endsWith(".bmp") ||
+            n.endsWith(".heic") ||
+            n.endsWith(".heif") ||
+            n.endsWith(".tif") ||
+            n.endsWith(".tiff")
     }
 
     private fun isVideoName(name: String): Boolean {
         val n = name.lowercase(Locale.ROOT)
-        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") || n.endsWith(".avi") || n.endsWith(".3gp")
+        return n.endsWith(".mp4") ||
+            n.endsWith(".mkv") ||
+            n.endsWith(".mov") ||
+            n.endsWith(".avi") ||
+            n.endsWith(".3gp") ||
+            n.endsWith(".webm") ||
+            n.endsWith(".m4v") ||
+            n.endsWith(".ts") ||
+            n.endsWith(".flv") ||
+            n.endsWith(".wmv")
     }
 
     private fun isAudioName(name: String): Boolean {
         val n = name.lowercase(Locale.ROOT)
-        return n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac") || n.endsWith(".wav") || n.endsWith(".ogg")
+        return n.endsWith(".opus") ||
+            n.endsWith(".mp3") ||
+            n.endsWith(".m4a") ||
+            n.endsWith(".aac") ||
+            n.endsWith(".wav") ||
+            n.endsWith(".ogg") ||
+            n.endsWith(".amr") ||
+            n.endsWith(".flac") ||
+            n.endsWith(".mid") ||
+            n.endsWith(".midi")
     }
 
     private fun isPdfName(name: String): Boolean {
@@ -1828,8 +1903,13 @@ class CleanupSimpleActivity : Activity() {
             n.endsWith(".xls") || n.endsWith(".xlsx") ||
             n.endsWith(".ppt") || n.endsWith(".pptx") ||
             n.endsWith(".txt") || n.endsWith(".csv") ||
+            n.endsWith(".rtf") || n.endsWith(".odt") ||
+            n.endsWith(".ods") || n.endsWith(".odp") ||
             n.endsWith(".zip") || n.endsWith(".rar") || n.endsWith(".7z") ||
-            n.endsWith(".xml") || n.endsWith(".json")
+            n.endsWith(".tar") || n.endsWith(".gz") ||
+            n.endsWith(".xml") || n.endsWith(".json") ||
+            n.endsWith(".html") || n.endsWith(".htm") ||
+            n.endsWith(".log")
     }
 
     private fun isWhatsAppBackup(item: FileItem): Boolean {
@@ -1846,22 +1926,119 @@ class CleanupSimpleActivity : Activity() {
         )
     }
 
+
+    private fun isAppItem(item: FileItem): Boolean {
+        return item.path.startsWith("app:")
+    }
+
+    private fun installedAppItems(): List<FileItem> {
+        return try {
+            @Suppress("DEPRECATION")
+            val packages = packageManager.getInstalledPackages(0)
+
+            packages.mapNotNull { pkg ->
+                val appInfo = pkg.applicationInfo ?: return@mapNotNull null
+
+                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+
+                if (isSystem && !isUpdatedSystem) {
+                    return@mapNotNull null
+                }
+
+                val appName = try {
+                    appInfo.loadLabel(packageManager).toString()
+                } catch (_: Exception) {
+                    pkg.packageName
+                }
+
+                val sourceFiles = mutableListOf<File>()
+
+                try {
+                    if (appInfo.sourceDir.isNotBlank()) {
+                        sourceFiles.add(File(appInfo.sourceDir))
+                    }
+                } catch (_: Exception) {
+                }
+
+                try {
+                    if (appInfo.publicSourceDir.isNotBlank()) {
+                        sourceFiles.add(File(appInfo.publicSourceDir))
+                    }
+                } catch (_: Exception) {
+                }
+
+                try {
+                    appInfo.splitSourceDirs?.forEach { split ->
+                        if (split.isNotBlank()) sourceFiles.add(File(split))
+                    }
+                } catch (_: Exception) {
+                }
+
+                val size = sourceFiles
+                    .distinctBy { it.absolutePath }
+                    .sumOf { f -> if (f.exists() && f.isFile) f.length() else 0L }
+
+                val version = pkg.versionName ?: "versão não informada"
+
+                FileItem(
+                    name = appName,
+                    path = "app:${pkg.packageName}",
+                    size = size,
+                    modified = pkg.lastUpdateTime,
+                    type = "Aplicativo • versão $version • pacote ${pkg.packageName}",
+                    category = "Aplicativos",
+                    risk = "normal"
+                )
+            }.sortedByDescending { it.size }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun isTrashItem(item: FileItem): Boolean {
+        val p = normalizedPath(item.path)
+        val n = item.name.lowercase(Locale.ROOT)
+
+        return p.contains("/.trash") ||
+            p.contains("/.trashed") ||
+            p.contains("/trash/") ||
+            p.contains("/lixeira/") ||
+            p.contains("/recycle") ||
+            p.contains("/recycler") ||
+            n.startsWith(".trashed") ||
+            n.contains("trash") ||
+            n.contains("lixeira")
+    }
+
+    private fun isDownloadItem(item: FileItem): Boolean {
+        val p = normalizedPath(item.path)
+        return p.contains("/download/") || p.contains("/downloads/")
+    }
+
     private fun categoryFiles(category: String): List<FileItem> {
         val minBytes = minSizeMb.toLong() * 1024L * 1024L
 
         return when (category) {
             "Novos nas últimas 24h" -> allFiles.filter { isLast24Hours(it) }
+            "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
 
             "Arquivos grandes" -> allFiles.filter { it.size >= minBytes }
-            "Vídeos" -> allFiles.filter { it.category == "Vídeos" && it.size >= minBytes }
-            "Imagens" -> allFiles.filter { it.category == "Imagens" && it.size >= minBytes }
-            "Áudios" -> allFiles.filter { it.category == "Áudios" }
-            "WhatsApp" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("whatsapp") }
-            "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" }
-            "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
+
+            "Vídeos" -> allFiles.filter { isVideoName(it.name) && it.size >= minBytes }
+            "Imagens" -> allFiles.filter { isImageName(it.name) && it.size >= minBytes }
+            "Áudios" -> allFiles.filter { isAudioName(it.name) }
+            "Documentos" -> allFiles.filter { isDocumentName(it.name) }
+            "Downloads" -> allFiles.filter { isDownloadItem(it) }
+
+            "Aplicativos" -> installedAppItems()
+            "Lixeira" -> allFiles.filter { isTrashItem(it) }
+
+            "WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
+            "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" || isWhatsAppBackup(it) }
             "Sensíveis" -> allFiles.filter { it.risk == "alto" }
-            "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
-            "APKs" -> allFiles.filter { it.category == "APKs" }
+            "APKs" -> allFiles.filter { it.category == "APKs" || it.name.lowercase(Locale.ROOT).endsWith(".apk") }
+
             "Fotos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isImageName(it.name) }
             "Vídeos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isVideoName(it.name) }
             "Documentos do WhatsApp" -> allFiles.filter {
@@ -1875,6 +2052,7 @@ class CleanupSimpleActivity : Activity() {
             "Áudios do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isAudioName(it.name) }
             "Backups do WhatsApp" -> allFiles.filter { isWhatsAppBackup(it) }
             "Todos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
+
             else -> allFiles
         }
     }
@@ -1957,12 +2135,13 @@ class CleanupSimpleActivity : Activity() {
 
         return when {
             p.contains("whatsapp") && (n.contains("msgstore") || p.contains("/databases/")) -> "Backups do WhatsApp"
-            p.contains("whatsapp") -> "WhatsApp"
-            n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") || n.endsWith(".avi") -> "Vídeos"
-            n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") -> "Imagens"
-            n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".wav") -> "Áudios"
+            isVideoName(file.name) -> "Vídeos"
+            isImageName(file.name) -> "Imagens"
+            isAudioName(file.name) -> "Áudios"
             n.endsWith(".apk") -> "APKs"
+            isDocumentName(file.name) -> "Documentos"
             n.endsWith(".db") || n.endsWith(".sqlite") || n.contains("crypt") || n.endsWith(".bak") || n.endsWith(".backup") -> "Backups"
+            p.contains("whatsapp") -> "WhatsApp"
             else -> "Outros"
         }
     }
@@ -1973,15 +2152,17 @@ class CleanupSimpleActivity : Activity() {
 
         return when {
             p.contains("whatsapp") && n.contains("msgstore") -> "Backup criptografado do WhatsApp"
-            p.contains("whatsapp") && n.endsWith(".pdf") -> "PDF do WhatsApp"
-            p.contains("whatsapp") && n.endsWith(".opus") -> "Áudio do WhatsApp"
-            p.contains("whatsapp") && n.endsWith(".mp4") -> "Vídeo do WhatsApp"
+            p.contains("whatsapp") && isPdfName(file.name) -> "PDF do WhatsApp"
+            p.contains("whatsapp") && isAudioName(file.name) -> "Áudio do WhatsApp"
+            p.contains("whatsapp") && isVideoName(file.name) -> "Vídeo do WhatsApp"
+            p.contains("whatsapp") && isImageName(file.name) -> "Imagem do WhatsApp"
             p.contains("whatsapp") -> "Arquivo do WhatsApp"
-            n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".mov") -> "Vídeo"
-            n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp") -> "Imagem"
-            n.endsWith(".opus") || n.endsWith(".mp3") || n.endsWith(".m4a") -> "Áudio"
+            isVideoName(file.name) -> "Vídeo"
+            isImageName(file.name) -> "Imagem"
+            isAudioName(file.name) -> "Áudio"
             n.endsWith(".apk") -> "APK"
-            n.endsWith(".pdf") -> "PDF"
+            isPdfName(file.name) -> "PDF"
+            isDocumentName(file.name) -> "Documento"
             n.endsWith(".db") || n.contains("crypt") -> "Banco de dados / backup"
             else -> "Arquivo"
         }
