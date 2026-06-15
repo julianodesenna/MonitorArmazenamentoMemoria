@@ -43,6 +43,11 @@ class CleanupSimpleActivity : Activity() {
     private lateinit var statusText: TextView
 
     private var currentCategory = ""
+      private val cleanupBackStack = mutableListOf<String>()
+
+      private val homeSummaryCache = mutableMapOf<String, String>()
+      private val homeSummarySizeCache = mutableMapOf<String, Long>()
+      private var homeSummarySignature = ""
     private var minSizeMb = 10
     private var orderMode = "size"
     private var allFiles: List<FileItem> = emptyList()
@@ -50,13 +55,28 @@ class CleanupSimpleActivity : Activity() {
     private val previewCache = mutableMapOf<String, Bitmap>()
     private val previewExecutor = java.util.concurrent.Executors.newFixedThreadPool(2)
     private val previewMainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var categoryDisplayLimit = 120
+    private var categoryDisplayLimit = 40
     private var yearFilter = "Todos"
+      private var appFilterMode = "Todos"
     private var autoLoadMoreLocked = false
     private lateinit var selectedInfoText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+          // T20B2_NATIVE_BACK_CALLBACK
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+              try {
+                  onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                      android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT
+                  ) {
+                      if (!navigateBackInCleanup()) {
+                          finish()
+                      }
+                  }
+              } catch (_: Exception) {
+              }
+          }
+
+super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         window.navigationBarColor = Color.WHITE
         window.statusBarColor = Color.WHITE
@@ -73,14 +93,12 @@ class CleanupSimpleActivity : Activity() {
     }
 
     override fun onBackPressed() {
-        if (currentCategory.isNotBlank()) {
-            currentCategory = ""
-            selectedFiles.clear()
-            drawHome()
-        } else {
-            finish()
-        }
-    }
+          if (navigateBackInCleanup()) {
+              return
+          }
+
+          super.onBackPressed()
+      }
 
     private fun buildScreen() {
         val main = LinearLayout(this)
@@ -113,13 +131,16 @@ class CleanupSimpleActivity : Activity() {
     }
 
     private fun drawHome() {
+          cleanupBackStack.clear()
+
         removeFloatingListNav()
         currentCategory = ""
-        categoryDisplayLimit = 120
+        categoryDisplayLimit = 40
         yearFilter = "Todos"
-        categoryDisplayLimit = 120
+        categoryDisplayLimit = 40
         yearFilter = "Todos"
         root.removeAllViews()
+          refreshHomeSummaryCacheIfNeeded()
         // Resumo premium do aparelho
         val data = Monitor.read(this)
 
@@ -385,15 +406,9 @@ class CleanupSimpleActivity : Activity() {
         categoriesTitle.setPadding(0, dp(8), 0, dp(10))
         root.addView(categoriesTitle)
 
-        addCategoryRow("🆕", "Novos nas últimas 24h", "Arquivos recebidos, baixados ou criados hoje", "◷", "Últimos modificados", "Arquivos alterados mais recentemente")
-        addCategoryRow("▣", "Arquivos grandes", "Arquivos acima do filtro", "▶", "Vídeos", "Filtrar vídeos")
-        addCategoryRow("▧", "Imagens", "Fotos e imagens", "♫", "Áudios", "Áudios e mensagens de voz")
-        addCategoryRow("◌", "WhatsApp", "Mídias e backups", "▤", "Backups", "Bancos de dados e cópias")
-        addCategoryRow("🖼", "Fotos do WhatsApp", "Imagens recebidas e enviadas", "🎬", "Vídeos do WhatsApp", "Vídeos recebidos e enviados")
-        addCategoryRow("📄", "Documentos do WhatsApp", "PDFs, planilhas e arquivos", "🎵", "Áudios do WhatsApp", "Áudios e mensagens de voz")
-        addCategoryRow("🗄", "Backups do WhatsApp", "Bancos de dados e backups", "📁", "Todos do WhatsApp", "Tudo que estiver no WhatsApp")
-        addCategoryRow("▦", "Aplicativos", "Apps instalados no aparelho", "◇", "APKs", "Instaladores antigos")
-    }
+          addHomeCategoriesSortedBySize()
+
+}
 
     private fun addCategoryRow(icon1: String, title1: String, desc1: String, icon2: String, title2: String, desc2: String) {
         val row = LinearLayout(this)
@@ -420,47 +435,724 @@ class CleanupSimpleActivity : Activity() {
         root.addView(row)
     }
 
-    private fun categoryCard(icon: String, title: String, desc: String): LinearLayout {
-        val files = categoryFiles(title)
-        val total = files.sumOf { it.size }
+    private fun refreshHomeSummaryCacheIfNeeded() {
+          if (allFiles.isEmpty()) {
+              homeSummaryCache.clear()
+              homeSummarySizeCache.clear()
+              homeSummarySignature = "empty"
+              return
+          }
 
-        val box = LinearLayout(this)
-        box.orientation = LinearLayout.VERTICAL
-        box.setPadding(dp(12), dp(12), dp(12), dp(12))
-        box.background = rounded(Color.WHITE, Color.rgb(218, 225, 240), dp(20))
+          val maxModified = allFiles.maxOfOrNull { it.modified } ?: 0L
+          val totalSize = allFiles.sumOf { it.size }
+          val appsSignature = try { installedAppItems().size } catch (_: Exception) { 0 }
+          val signature = "${allFiles.size}|$totalSize|$maxModified|$minSizeMb|$appsSignature"
 
-        val t = TextView(this)
-        t.text = "$icon\n$title"
-        t.textSize = 16f
-        t.setTypeface(null, Typeface.BOLD)
-        t.setTextColor(Color.rgb(14, 26, 56))
-        box.addView(t)
+          if (signature == homeSummarySignature && homeSummaryCache.isNotEmpty() && homeSummarySizeCache.isNotEmpty()) {
+              return
+          }
 
-        val d = TextView(this)
-        d.text = "$desc\n${files.size} arquivos • ${formatSize(total)}"
-        d.textSize = 11f
-        d.setTextColor(Color.rgb(80, 90, 110))
-        d.setPadding(0, dp(6), 0, 0)
-        box.addView(d)
+          data class Bucket(var count: Int = 0, var size: Long = 0L)
 
-        box.setOnClickListener {
-            showCategory(title, desc)
-        }
+          fun put(map: MutableMap<String, Bucket>, key: String, item: FileItem) {
+              val bucket = map.getOrPut(key) { Bucket() }
+              bucket.count += 1
+              bucket.size += item.size
+          }
 
-        val params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        params.setMargins(dp(4), dp(4), dp(4), dp(8))
-        box.layoutParams = params
+          fun lowerName(item: FileItem): String = item.name.lowercase(Locale.ROOT)
+          fun lowerPath(item: FileItem): String = item.path.lowercase(Locale.ROOT)
 
-        return box
-    }
+          fun isImage(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".jpg") ||
+                  n.endsWith(".jpeg") ||
+                  n.endsWith(".png") ||
+                  n.endsWith(".webp") ||
+                  n.endsWith(".gif") ||
+                  n.endsWith(".bmp") ||
+                  n.endsWith(".heic") ||
+                  n.endsWith(".heif")
+          }
 
-    private fun showCategory(categoryTitle: String, categoryDesc: String) {
+          fun isVideo(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".mp4") ||
+                  n.endsWith(".mkv") ||
+                  n.endsWith(".mov") ||
+                  n.endsWith(".avi") ||
+                  n.endsWith(".3gp") ||
+                  n.endsWith(".webm")
+          }
+
+          fun isAudio(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".opus") ||
+                  n.endsWith(".mp3") ||
+                  n.endsWith(".m4a") ||
+                  n.endsWith(".wav") ||
+                  n.endsWith(".aac") ||
+                  n.endsWith(".ogg") ||
+                  n.endsWith(".flac")
+          }
+
+          fun isApk(item: FileItem): Boolean {
+              return lowerName(item).endsWith(".apk")
+          }
+
+          fun isDownload(item: FileItem): Boolean {
+              val p = lowerPath(item)
+              return p.contains("/download") ||
+                  p.contains("/downloads") ||
+                  p.contains("/baixados")
+          }
+
+          fun isWhatsapp(item: FileItem): Boolean {
+              val p = lowerPath(item)
+              return p.contains("whatsapp") ||
+                  p.contains("com.whatsapp") ||
+                  p.contains("com.whatsapp.w4b")
+          }
+
+          fun isBackup(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return n.endsWith(".db") ||
+                  n.endsWith(".sqlite") ||
+                  n.contains("crypt") ||
+                  n.endsWith(".bak") ||
+                  n.endsWith(".backup") ||
+                  p.contains("/backup") ||
+                  p.contains("/backups") ||
+                  p.contains("/databases/")
+          }
+
+          val now = System.currentTimeMillis()
+          val last24h = now - (24L * 60L * 60L * 1000L)
+          val bigCutoff = minSizeMb * 1024L * 1024L
+
+          val buckets = mutableMapOf<String, Bucket>()
+
+          allFiles.forEach { item ->
+              if (item.modified >= last24h) put(buckets, "Novos nas últimas 24h", item)
+              if (item.size >= bigCutoff) put(buckets, "Arquivos grandes", item)
+              if (item.risk == "alto") put(buckets, "Sensíveis", item)
+
+              if (isImage(item)) put(buckets, "Imagens", item)
+              if (isVideo(item)) put(buckets, "Vídeos", item)
+              if (isAudio(item)) put(buckets, "Áudios", item)
+              if (isDownload(item)) put(buckets, "Downloads", item)
+              if (isWhatsapp(item)) put(buckets, "WhatsApp", item)
+              if (isBackup(item) && !isWhatsapp(item)) put(buckets, "Backups", item)
+              if (isApk(item)) put(buckets, "APKs", item)
+          }
+
+          val latest = allFiles.sortedByDescending { it.modified }.take(200)
+          latest.forEach { put(buckets, "Últimos modificados", it) }
+
+          homeSummaryCache.clear()
+          homeSummarySizeCache.clear()
+
+          buckets.forEach { entry ->
+              val bucket = entry.value
+              homeSummaryCache[entry.key] = "${bucket.count} arquivos • ${formatSize(bucket.size)}"
+              homeSummarySizeCache[entry.key] = bucket.size
+          }
+
+          try {
+              val apps = installedAppItems()
+              val appTotal = apps.sumOf { it.size }
+              homeSummaryCache["Aplicativos"] = "${apps.size} apps • ${formatSize(appTotal)}"
+              homeSummarySizeCache["Aplicativos"] = appTotal
+          } catch (_: Exception) {
+              homeSummaryCache["Aplicativos"] = "Toque para abrir filtros de aplicativos"
+              homeSummarySizeCache["Aplicativos"] = 0L
+          }
+
+          homeSummaryCache["Duplicados"] = "Toque para analisar possíveis duplicados"
+          homeSummarySizeCache["Duplicados"] = 0L
+
+          homeSummaryCache["Cache e temporários"] = "Toque para abrir cache e temporários"
+          homeSummarySizeCache["Cache e temporários"] = 0L
+
+          homeSummarySignature = signature
+      }
+
+private fun fastCategorySummary(title: String): String {
+          val cached = homeSummaryCache[title]
+          if (!cached.isNullOrBlank()) return cached
+
+          return when (title) {
+              "Duplicados",
+              "Arquivos duplicados",
+              "Imagens duplicadas",
+              "Vídeos duplicados",
+              "Áudios duplicados",
+              "Documentos duplicados" -> "Toque para analisar possíveis duplicados"
+
+              "Cache e temporários",
+              "Cache acessível",
+              "Temporários",
+              "Miniaturas",
+              "Cache do WhatsApp" -> "Toque para abrir cache e temporários"
+
+              "WhatsApp" -> "Toque para abrir as pastas do WhatsApp"
+              "Aplicativos" -> "Toque para abrir filtros de aplicativos"
+
+              else -> "Toque para abrir"
+          }
+      }
+
+private fun cleanupParentCategory(title: String): String? {
+          return when (title) {
+              "Fotos do WhatsApp",
+              "Vídeos do WhatsApp",
+              "Documentos do WhatsApp",
+              "Áudios do WhatsApp",
+              "Backups do WhatsApp",
+              "Todos do WhatsApp" -> "WhatsApp"
+
+              "Arquivos duplicados",
+              "Imagens duplicadas",
+              "Vídeos duplicados",
+              "Áudios duplicados",
+              "Documentos duplicados" -> "Duplicados"
+
+              "Cache acessível",
+              "Temporários",
+              "Miniaturas",
+              "Cache do WhatsApp" -> "Cache e temporários"
+
+              else -> null
+          }
+      }
+
+      private fun cleanupIsMainFolder(title: String): Boolean {
+          return title == "WhatsApp" ||
+              title == "Duplicados" ||
+              title == "Cache e temporários"
+      }
+
+private fun cleanupCategoryDesc(title: String): String {
+          return when (title) {
+              "WhatsApp" -> "Arquivos do WhatsApp por pasta"
+              "Duplicados" -> "Possíveis arquivos repetidos"
+              "Cache e temporários" -> "Caches acessíveis e arquivos temporários"
+              "Novos nas últimas 24h" -> "Arquivos criados ou alterados recentemente"
+              "Últimos modificados" -> "Arquivos mais recentes do aparelho"
+              "Arquivos grandes" -> "Arquivos que ocupam mais espaço"
+              "Sensíveis" -> "Arquivos que exigem cuidado"
+              "Imagens" -> "Fotos e imagens do aparelho"
+              "Vídeos" -> "Vídeos encontrados no armazenamento"
+              "Áudios" -> "Músicas, gravações e áudios"
+              "Downloads" -> "Arquivos baixados"
+              "Backups" -> "Backups e bancos de dados"
+              "Aplicativos" -> "Apps instalados e filtros"
+              "APKs" -> "Instaladores APK encontrados"
+              "Fotos do WhatsApp" -> "Imagens recebidas e enviadas"
+              "Vídeos do WhatsApp" -> "Vídeos recebidos e enviados"
+              "Documentos do WhatsApp" -> "PDFs, planilhas e arquivos"
+              "Áudios do WhatsApp" -> "Áudios e mensagens de voz"
+              "Backups do WhatsApp" -> "Bancos de dados e backups"
+              "Todos do WhatsApp" -> "Tudo que estiver no WhatsApp"
+              "Arquivos duplicados" -> "Todos os possíveis duplicados"
+              "Imagens duplicadas" -> "Fotos e imagens repetidas"
+              "Vídeos duplicados" -> "Vídeos possivelmente repetidos"
+              "Áudios duplicados" -> "Áudios possivelmente repetidos"
+              "Documentos duplicados" -> "Documentos e arquivos compactados repetidos"
+              "Cache acessível" -> "Pastas cache visíveis no armazenamento"
+              "Temporários" -> "Arquivos temporários"
+              "Miniaturas" -> "Thumbnails e prévias"
+              "Cache do WhatsApp" -> "Cache acessível relacionado ao WhatsApp"
+              else -> ""
+          }
+      }
+
+      private fun openCleanupCategory(title: String, desc: String) {
+          val previous = currentCategory
+          if (cleanupBackStack.isEmpty() || cleanupBackStack.last() != previous) {
+              cleanupBackStack.add(previous)
+          }
+          showCategory(title, desc)
+      }
+
+      private fun navigateBackInCleanup(): Boolean {
+          val current = currentCategory
+
+          val parent = cleanupParentCategory(current)
+          if (parent != null) {
+              categoryDisplayLimit = 40
+              autoLoadMoreLocked = false
+              showCategory(parent, cleanupCategoryDesc(parent))
+              return true
+          }
+
+          if (cleanupIsMainFolder(current)) {
+              categoryDisplayLimit = 40
+              autoLoadMoreLocked = false
+              drawHome()
+              return true
+          }
+
+          if (cleanupBackStack.isNotEmpty()) {
+              val previous = cleanupBackStack.removeAt(cleanupBackStack.size - 1)
+
+              categoryDisplayLimit = 40
+              autoLoadMoreLocked = false
+
+              if (previous.isBlank()) {
+                  drawHome()
+              } else {
+                  showCategory(previous, cleanupCategoryDesc(previous))
+              }
+
+              return true
+          }
+
+          if (current.isNotBlank()) {
+              categoryDisplayLimit = 40
+              autoLoadMoreLocked = false
+              drawHome()
+              return true
+          }
+
+          return false
+      }
+
+private fun homeCategorySizeForOrder(title: String): Long {
+          return homeSummarySizeCache[title] ?: 0L
+      }
+
+      private fun addHomeCategoriesSortedBySize() {
+          data class HomeCategory(
+              val icon: String,
+              val title: String,
+              val desc: String
+          )
+
+          val fixedTop = listOf(
+              HomeCategory("🆕", "Novos nas últimas 24h", "Arquivos criados ou adicionados hoje"),
+              HomeCategory("🕘", "Últimos modificados", "Arquivos alterados recentemente")
+          )
+
+          val sortable = listOf(
+              HomeCategory("📦", "Arquivos grandes", "Os maiores arquivos do aparelho"),
+              HomeCategory("🔒", "Sensíveis", "Arquivos que exigem conferência manual"),
+              HomeCategory("🖼️", "Imagens", "Fotos, prints e imagens salvas"),
+              HomeCategory("🎬", "Vídeos", "Vídeos que ocupam mais espaço"),
+              HomeCategory("🎵", "Áudios", "Músicas, gravações e áudios"),
+              HomeCategory("⬇️", "Downloads", "Arquivos baixados e recebidos"),
+              HomeCategory("💬", "WhatsApp", "Mídias e documentos separados por pasta"),
+              HomeCategory("🧬", "Duplicados", "Possíveis repetidos para conferir"),
+              HomeCategory("🧹", "Cache e temporários", "Arquivos acessíveis de limpeza leve"),
+              HomeCategory("🗄️", "Backups", "Cópias, bancos e arquivos de reserva"),
+              HomeCategory("📱", "Aplicativos", "Apps instalados com filtros de análise"),
+              HomeCategory("📦", "APKs", "Instaladores APK salvos no aparelho")
+          )
+
+          val ordered = fixedTop + sortable.sortedWith(
+              compareByDescending<HomeCategory> { homeCategorySizeForOrder(it.title) }
+                  .thenBy { it.title }
+          )
+
+          var i = 0
+          while (i < ordered.size) {
+              val first = ordered[i]
+              val second = ordered.getOrNull(i + 1)
+
+              if (second != null) {
+                  addCategoryRow(
+                      first.icon,
+                      first.title,
+                      first.desc,
+                      second.icon,
+                      second.title,
+                      second.desc
+                  )
+                  i += 2
+              } else {
+                  addCategorySingleRow(
+                      first.icon,
+                      first.title,
+                      first.desc
+                  )
+                  i += 1
+              }
+          }
+      }
+
+private fun categoryCard(icon: String, title: String, desc: String): LinearLayout {
+          val summary = fastCategorySummary(title)
+
+          val box = LinearLayout(this)
+          box.orientation = LinearLayout.VERTICAL
+          box.setPadding(dp(12), dp(12), dp(12), dp(12))
+          box.background = rounded(Color.WHITE, Color.rgb(218, 225, 240), dp(20))
+
+          val t = TextView(this)
+          t.text = "$icon\n$title"
+          t.textSize = 16f
+          t.setTypeface(null, Typeface.BOLD)
+          t.setTextColor(Color.rgb(14, 26, 56))
+          box.addView(t)
+
+          val d = TextView(this)
+          val fullText = "$desc\n$summary"
+          val spannable = android.text.SpannableString(fullText)
+          val sizeRegex = Regex("""\d+(?:[,.]\d+)?\s*(?:B|KB|MB|GB|TB)""")
+          val sizeMatch = sizeRegex.find(fullText)
+
+          if (sizeMatch != null) {
+              spannable.setSpan(
+                  android.text.style.StyleSpan(Typeface.BOLD),
+                  sizeMatch.range.first,
+                  sizeMatch.range.last + 1,
+                  android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+              )
+          }
+
+          d.text = spannable
+          d.textSize = 11f
+          d.setTextColor(Color.rgb(80, 90, 110))
+          d.setPadding(0, dp(6), 0, 0)
+          box.addView(d)
+
+          box.setOnClickListener {
+              openCleanupCategory(title, desc)
+          }
+
+          val params = LinearLayout.LayoutParams(
+              LinearLayout.LayoutParams.MATCH_PARENT,
+              LinearLayout.LayoutParams.WRAP_CONTENT
+          )
+          params.setMargins(dp(4), dp(4), dp(4), dp(8))
+          box.layoutParams = params
+
+          return box
+      }
+
+    private fun showWhatsappFolders() {
+          removeFloatingListNav()
+          currentCategory = "WhatsApp"
+          categoryDisplayLimit = 40
+          yearFilter = "Todos"
+          autoLoadMoreLocked = false
+          root.removeAllViews()
+
+          val back = Button(this)
+          back.text = "← Voltar para categorias"
+          back.setOnClickListener {
+              if (!navigateBackInCleanup()) {
+                  categoryDisplayLimit = 40
+                  drawHome()
+              }
+          }
+          root.addView(back)
+
+          val title = TextView(this)
+          title.text = "WhatsApp"
+          title.textSize = 28f
+          title.setTypeface(null, Typeface.BOLD)
+          title.setTextColor(Color.rgb(10, 18, 36))
+          title.setPadding(0, dp(12), 0, dp(4))
+          root.addView(title)
+
+          val subtitle = TextView(this)
+          subtitle.text = "Arquivos do WhatsApp organizados por pasta."
+          subtitle.textSize = 15f
+          subtitle.setTextColor(Color.rgb(80, 90, 110))
+          subtitle.setPadding(0, 0, 0, dp(14))
+          root.addView(subtitle)
+
+          addCategoryRow(
+              "🖼️",
+              "Fotos do WhatsApp",
+              "Imagens recebidas e enviadas",
+              "🎬",
+              "Vídeos do WhatsApp",
+              "Vídeos recebidos e enviados"
+          )
+
+          addCategoryRow(
+              "📄",
+              "Documentos do WhatsApp",
+              "PDFs, planilhas e arquivos",
+              "🎵",
+              "Áudios do WhatsApp",
+              "Áudios e mensagens de voz"
+          )
+
+          addCategoryRow(
+              "🗄️",
+              "Backups do WhatsApp",
+              "Bancos de dados e backups",
+              "📁",
+              "Todos do WhatsApp",
+              "Tudo que estiver no WhatsApp"
+          )
+      }
+
+private fun showDuplicateFolders() {
+          removeFloatingListNav()
+          currentCategory = "Duplicados"
+          categoryDisplayLimit = 40
+          yearFilter = "Todos"
+          autoLoadMoreLocked = false
+          root.removeAllViews()
+          // T21B_NOTICE_showDuplicateFolders
+          addCleanupNoticeCard("Duplicados são sugestões", "Confira nome, pasta e data antes de excluir. A análise evita travar e aponta possíveis repetidos, mas a decisão final deve ser manual.")
+
+          val back = Button(this)
+          back.text = "← Voltar para categorias"
+          back.setOnClickListener {
+              if (!navigateBackInCleanup()) {
+                  categoryDisplayLimit = 40
+                  drawHome()
+              }
+          }
+          root.addView(back)
+
+          val title = TextView(this)
+          title.text = "Duplicados"
+          title.textSize = 28f
+          title.setTypeface(null, Typeface.BOLD)
+          title.setTextColor(Color.rgb(10, 18, 36))
+          title.setPadding(0, dp(12), 0, dp(4))
+          root.addView(title)
+
+          val subtitle = TextView(this)
+          subtitle.text = "Possíveis arquivos duplicados identificados de forma leve, sem varredura pesada."
+          subtitle.textSize = 15f
+          subtitle.setTextColor(Color.rgb(80, 90, 110))
+          subtitle.setPadding(0, 0, 0, dp(14))
+          root.addView(subtitle)
+
+          val warning = TextView(this)
+          warning.text = "Atenção: esta primeira análise usa tamanho + extensão. Antes de excluir, confira os arquivos."
+          warning.textSize = 12f
+          warning.setTextColor(Color.rgb(120, 78, 20))
+          warning.setPadding(dp(12), dp(10), dp(12), dp(10))
+          warning.background = rounded(Color.rgb(255, 248, 232), Color.rgb(238, 202, 126), dp(14))
+          root.addView(warning)
+
+          addCategoryRow(
+              "📁",
+              "Arquivos duplicados",
+              "Todos os possíveis duplicados",
+              "🖼️",
+              "Imagens duplicadas",
+              "Fotos e imagens repetidas"
+          )
+
+          addCategoryRow(
+              "🎬",
+              "Vídeos duplicados",
+              "Vídeos possivelmente repetidos",
+              "🎵",
+              "Áudios duplicados",
+              "Áudios possivelmente repetidos"
+          )
+
+          addCategorySingleRow(
+              "📄",
+              "Documentos duplicados",
+              "Documentos e arquivos compactados repetidos"
+          )
+      }
+
+private fun showCacheFolders() {
+          removeFloatingListNav()
+          currentCategory = "Cache e temporários"
+          categoryDisplayLimit = 40
+          yearFilter = "Todos"
+          autoLoadMoreLocked = false
+          root.removeAllViews()
+          // T21B_NOTICE_showCacheFolders
+          addCleanupNoticeCard("Cache com limite do Android", "O app mostra apenas arquivos acessíveis. Cache interno de outros aplicativos pode exigir abertura da tela oficial de armazenamento do Android.")
+
+          val back = Button(this)
+          back.text = "← Voltar para categorias"
+          back.setOnClickListener {
+              if (!navigateBackInCleanup()) {
+                  categoryDisplayLimit = 40
+                  drawHome()
+              }
+          }
+          root.addView(back)
+
+          val title = TextView(this)
+          title.text = "Cache e temporários"
+          title.textSize = 28f
+          title.setTypeface(null, Typeface.BOLD)
+          title.setTextColor(Color.rgb(10, 18, 36))
+          title.setPadding(0, dp(12), 0, dp(4))
+          root.addView(title)
+
+          val subtitle = TextView(this)
+          subtitle.text = "Temporários e caches acessíveis pelo app."
+          subtitle.textSize = 15f
+          subtitle.setTextColor(Color.rgb(80, 90, 110))
+          subtitle.setPadding(0, 0, 0, dp(14))
+          root.addView(subtitle)
+
+          val warning = TextView(this)
+          warning.text = "O Android não permite limpar silenciosamente o cache interno de todos os apps. Aqui aparecem caches acessíveis por arquivo. Para cache interno de apps, use o atalho oficial do Android abaixo."
+          warning.textSize = 12f
+          warning.setTextColor(Color.rgb(120, 78, 20))
+          warning.setPadding(dp(12), dp(10), dp(12), dp(10))
+          warning.background = rounded(Color.rgb(255, 248, 232), Color.rgb(238, 202, 126), dp(14))
+          root.addView(warning)
+
+          addCategoryRow(
+              "🧹",
+              "Cache acessível",
+              "Pastas cache visíveis no armazenamento",
+              "🕒",
+              "Temporários",
+              "Temporários"
+          )
+
+          addCategoryRow(
+              "🖼️",
+              "Miniaturas",
+              "Miniaturas e prévias",
+              "💬",
+              "Cache do WhatsApp",
+              "Cache acessível relacionado ao WhatsApp"
+          )
+
+          val androidCard = card()
+          androidCard.addView(titleText("Cache dos aplicativos pelo Android"))
+
+          val androidText = TextView(this)
+          androidText.text = "Abre a tela oficial de armazenamento do Android. Por segurança, o Android exige limpar cache de apps por lá."
+          androidText.textSize = 14f
+          androidText.setTextColor(Color.rgb(70, 80, 100))
+          androidText.setPadding(0, dp(8), 0, dp(12))
+          androidCard.addView(androidText)
+
+          val openStorage = Button(this)
+          openStorage.text = "ABRIR ARMAZENAMENTO DO ANDROID"
+          openStorage.setOnClickListener {
+              try {
+                  startActivity(Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+              } catch (_: Exception) {
+                  try {
+                      startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+                  } catch (_: Exception) {
+                      startActivity(Intent(Settings.ACTION_SETTINGS))
+                  }
+              }
+          }
+          androidCard.addView(openStorage)
+
+          root.addView(androidCard)
+      }
+
+private fun addCleanupNoticeCard(title: String, message: String) {
+          val info = card()
+          info.setPadding(dp(14), dp(14), dp(14), dp(14))
+
+          val t = TextView(this)
+          t.text = title
+          t.textSize = 16f
+          t.setTypeface(null, Typeface.BOLD)
+          t.setTextColor(Color.rgb(14, 26, 56))
+          t.includeFontPadding = false
+          info.addView(t)
+
+          val m = TextView(this)
+          m.text = message
+          m.textSize = 13f
+          m.setTextColor(Color.rgb(80, 90, 110))
+          m.setPadding(0, dp(8), 0, 0)
+          info.addView(m)
+
+          root.addView(info)
+      }
+
+      private fun cleanupEmptyMessage(categoryTitle: String): String {
+          return when (categoryTitle) {
+              "Novos nas últimas 24h" -> "Nenhum arquivo novo encontrado nas últimas 24 horas."
+              "Últimos modificados" -> "Nenhum arquivo modificado recentemente foi encontrado."
+              "Arquivos grandes" -> "Nenhum arquivo grande encontrado com o filtro atual. Reduza o filtro de tamanho para ver mais resultados."
+              "Sensíveis" -> "Nenhum arquivo sensível encontrado nesta análise."
+              "Imagens" -> "Nenhuma imagem encontrada nesta análise."
+              "Vídeos" -> "Nenhum vídeo encontrado nesta análise."
+              "Áudios" -> "Nenhum áudio encontrado nesta análise."
+              "Downloads" -> "Nenhum arquivo baixado encontrado nesta análise."
+              "Backups" -> "Nenhum backup separado encontrado nesta análise."
+              "APKs" -> "Nenhum instalador APK encontrado nesta análise."
+              "Aplicativos" -> "Nenhum aplicativo encontrado com o filtro atual."
+              "Fotos do WhatsApp" -> "Nenhuma foto do WhatsApp encontrada nesta análise."
+              "Vídeos do WhatsApp" -> "Nenhum vídeo do WhatsApp encontrado nesta análise."
+              "Documentos do WhatsApp" -> "Nenhum documento do WhatsApp encontrado nesta análise."
+              "Áudios do WhatsApp" -> "Nenhum áudio do WhatsApp encontrado nesta análise."
+              "Backups do WhatsApp" -> "Nenhum backup do WhatsApp encontrado nesta análise."
+              "Todos do WhatsApp" -> "Nenhum arquivo do WhatsApp encontrado nesta análise."
+              "Arquivos duplicados",
+              "Imagens duplicadas",
+              "Vídeos duplicados",
+              "Áudios duplicados",
+              "Documentos duplicados" -> "Nenhum possível duplicado encontrado com a análise atual."
+              "Cache acessível",
+              "Temporários",
+              "Miniaturas",
+              "Cache do WhatsApp" -> "Nenhum arquivo desta categoria foi encontrado nesta análise."
+              else -> "Nenhum item encontrado nesta categoria."
+          }
+      }
+
+      private fun cleanupCategoryWarningTitle(categoryTitle: String): String {
+          return when (categoryTitle) {
+              "Arquivos duplicados",
+              "Imagens duplicadas",
+              "Vídeos duplicados",
+              "Áudios duplicados",
+              "Documentos duplicados" -> "Atenção antes de excluir"
+              "Cache acessível",
+              "Temporários",
+              "Miniaturas",
+              "Cache do WhatsApp" -> "Limpeza com segurança"
+              else -> ""
+          }
+      }
+
+      private fun cleanupCategoryWarningMessage(categoryTitle: String): String {
+          return when (categoryTitle) {
+              "Arquivos duplicados",
+              "Imagens duplicadas",
+              "Vídeos duplicados",
+              "Áudios duplicados",
+              "Documentos duplicados" -> "A lista mostra possíveis duplicados por tamanho e tipo. Confira o nome, pasta e data antes de excluir qualquer arquivo."
+              "Cache acessível",
+              "Temporários",
+              "Miniaturas",
+              "Cache do WhatsApp" -> "O Android limita a limpeza automática de cache interno de aplicativos. Esta área mostra apenas arquivos acessíveis ao app."
+              else -> ""
+          }
+      }
+
+private fun showCategory(categoryTitle: String, categoryDesc: String) {
+          if (categoryTitle == "Cache e temporários") {
+              showCacheFolders()
+              return
+          }
+
+          if (categoryTitle == "Duplicados") {
+              showDuplicateFolders()
+              return
+          }
+
+          if (categoryTitle == "WhatsApp") {
+              showWhatsappFolders()
+              return
+          }
+
         removeFloatingListNav()
         if (currentCategory != categoryTitle) {
-            categoryDisplayLimit = 120
+              if (categoryTitle != "Aplicativos") appFilterMode = "Todos"
+            categoryDisplayLimit = 40
             yearFilter = "Todos"
         }
         autoLoadMoreLocked = false
@@ -470,9 +1162,11 @@ class CleanupSimpleActivity : Activity() {
         val back = Button(this)
         back.text = "← Voltar para categorias"
         back.setOnClickListener {
-            categoryDisplayLimit = 120
-            drawHome()
-        }
+              if (!navigateBackInCleanup()) {
+                  categoryDisplayLimit = 40
+                  drawHome()
+              }
+          }
         root.addView(back)
 
         val title = TextView(this)
@@ -490,7 +1184,20 @@ class CleanupSimpleActivity : Activity() {
         subtitle.setPadding(0, 0, 0, dp(14))
         root.addView(subtitle)
 
+          // T21B_CATEGORY_NOTICE
+          val warningTitle = cleanupCategoryWarningTitle(categoryTitle)
+          val warningMessage = cleanupCategoryWarningMessage(categoryTitle)
+          if (warningTitle.isNotBlank() && warningMessage.isNotBlank()) {
+              addCleanupNoticeCard(warningTitle, warningMessage)
+          }
+
         val rawCategoryItems = categoryFiles(categoryTitle)
+
+          // T21B_EMPTY_CATEGORY_MESSAGE
+          if (rawCategoryItems.isEmpty()) {
+              addCleanupNoticeCard("Nada encontrado", cleanupEmptyMessage(categoryTitle))
+              return
+          }
 
         fun chipButton(label: String, active: Boolean, onClick: () -> Unit): TextView {
             return TextView(this).apply {
@@ -565,19 +1272,19 @@ class CleanupSimpleActivity : Activity() {
 
         addWeightedChip(sizeRow, chipButton("10 MB", minSizeMb == 10) {
             minSizeMb = 10
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
         addWeightedChip(sizeRow, chipButton("50 MB", minSizeMb == 50) {
             minSizeMb = 50
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
         addWeightedChip(sizeRow, chipButton("100 MB", minSizeMb == 100) {
             minSizeMb = 100
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
@@ -588,25 +1295,97 @@ class CleanupSimpleActivity : Activity() {
 
         addWeightedChip(orderRow, chipButton("Maiores", orderMode == "size") {
             orderMode = "size"
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
         addWeightedChip(orderRow, chipButton("Recentes", orderMode == "date") {
             orderMode = "date"
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
         addWeightedChip(orderRow, chipButton("Antigos", orderMode == "old") {
             orderMode = "old"
-            categoryDisplayLimit = 120
+            categoryDisplayLimit = 40
             showCategory(categoryTitle, categoryDesc)
         })
 
         filter.addView(orderRow)
 
-        val yearTitle = TextView(this)
+          if (categoryTitle == "Aplicativos") {
+              val appFilterTitle = TextView(this)
+              appFilterTitle.text = "Filtro de aplicativos"
+              appFilterTitle.textSize = 11f
+              appFilterTitle.setTypeface(null, Typeface.BOLD)
+              appFilterTitle.setTextColor(Color.rgb(80, 90, 110))
+              appFilterTitle.setPadding(0, dp(8), 0, dp(6))
+              filter.addView(appFilterTitle)
+
+              val appRow1 = LinearLayout(this)
+              appRow1.orientation = LinearLayout.HORIZONTAL
+
+              addWeightedChip(appRow1, chipButton("Todos", appFilterMode == "Todos") {
+                  appFilterMode = "Todos"
+                  categoryDisplayLimit = 40
+                  showCategory(categoryTitle, categoryDesc)
+              })
+
+              addWeightedChip(appRow1, chipButton("Baixados", appFilterMode == "Baixados") {
+                  appFilterMode = "Baixados"
+                  categoryDisplayLimit = 40
+                  showCategory(categoryTitle, categoryDesc)
+              })
+
+              filter.addView(appRow1)
+
+              val appRow2 = LinearLayout(this)
+              appRow2.orientation = LinearLayout.HORIZONTAL
+
+              addWeightedChip(appRow2, chipButton("Sistema", appFilterMode == "Sistema") {
+                  appFilterMode = "Sistema"
+                  categoryDisplayLimit = 40
+                  showCategory(categoryTitle, categoryDesc)
+              })
+
+              addWeightedChip(appRow2, chipButton("Sistema atualizado", appFilterMode == "Sistema atualizado") {
+                  appFilterMode = "Sistema atualizado"
+                  categoryDisplayLimit = 40
+                  showCategory(categoryTitle, categoryDesc)
+              })
+
+              filter.addView(appRow2)
+
+              val appRow3 = LinearLayout(this)
+              appRow3.orientation = LinearLayout.HORIZONTAL
+
+              addWeightedChip(appRow3, chipButton("Não utilizados", appFilterMode == "Não utilizados") {
+                  appFilterMode = "Não utilizados"
+                  categoryDisplayLimit = 40
+                  showCategory(categoryTitle, categoryDesc)
+              })
+
+              filter.addView(appRow3)
+
+              if (appFilterMode == "Não utilizados") {
+                  val usageHint = TextView(this)
+                  usageHint.text = "Não utilizados: se o Android permitir Acesso ao uso, o app usa o último uso real. Se não permitir, mostra uma estimativa com apps baixados mais antigos/menos atualizados. Toque aqui para tentar abrir Acesso ao uso."
+                  usageHint.textSize = 11f
+                  usageHint.setTextColor(Color.rgb(80, 90, 110))
+                  usageHint.setPadding(dp(10), dp(8), dp(10), dp(8))
+                  usageHint.background = rounded(Color.rgb(248, 250, 253), Color.rgb(218, 225, 236), dp(12))
+                  usageHint.setOnClickListener {
+                      try {
+                          startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                      } catch (_: Exception) {
+                          startActivity(Intent(Settings.ACTION_SETTINGS))
+                      }
+                  }
+                  filter.addView(usageHint)
+              }
+          }
+
+val yearTitle = TextView(this)
         yearTitle.text = "Ano"
         yearTitle.textSize = 11f
         yearTitle.setTypeface(null, Typeface.BOLD)
@@ -647,7 +1426,7 @@ class CleanupSimpleActivity : Activity() {
             popup.setOnMenuItemClickListener { item ->
                 val selected = yearOptions.getOrNull(item.itemId) ?: "Todos"
                 yearFilter = selected
-                categoryDisplayLimit = 120
+                categoryDisplayLimit = 40
                 autoLoadMoreLocked = false
                 showCategory(categoryTitle, categoryDesc)
                 true
@@ -1171,7 +1950,6 @@ class CleanupSimpleActivity : Activity() {
             }
         }
 
-
         val titleRow = LinearLayout(this)
         titleRow.orientation = LinearLayout.HORIZONTAL
         titleRow.gravity = Gravity.CENTER_VERTICAL
@@ -1320,10 +2098,6 @@ class CleanupSimpleActivity : Activity() {
         return box
     }
 
-
-
-    
-
 private fun selectedItemsForActions(): List<FileItem> {
     if (selectedFiles.isEmpty()) return emptyList()
 
@@ -1457,7 +2231,7 @@ private fun updateSelectedInfo() {
     val message = buildString {
         append("Arquivos selecionados: ${items.size}\n")
         append("Espaço estimado: ${formatSize(totalSize)}\n\n")
-        append("Essa ação tentará apagar os arquivos selecionados do aparelho.\n")
+        append("Essa ação tentará apagar somente arquivos permitidos do armazenamento do aparelho.\n")
         append("Depois de apagados, eles podem não ser recuperáveis.\n\n")
 
         if (sensitive.isNotEmpty()) {
@@ -1511,7 +2285,7 @@ private fun updateSelectedInfo() {
             for (item in items) {
                 try {
                     val file = File(item.path)
-                    if (file.exists() && file.isFile && file.delete()) {
+                    if (file.exists() && file.isFile && cleanupT25SafeDeleteFile(file)) {
                         deleted++
                         deletedPaths.add(item.path)
                     } else {
@@ -1555,7 +2329,6 @@ private fun updateSelectedInfo() {
             }
         }
     }
-
 
     private fun hasStorageAccess(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -1601,7 +2374,6 @@ private fun updateSelectedInfo() {
         }
     }
 
-    
 override fun onNewIntent(intent: Intent?) {
     super.onNewIntent(intent)
 
@@ -1616,9 +2388,6 @@ override fun onResume() {
             scanFiles()
         }
     }
-
-
-
 
     private fun looksLikePdfContent(file: File): Boolean {
         return try {
@@ -1694,9 +2463,6 @@ override fun onResume() {
         return file
     }
 
-
-    
-
 private fun appPackage(item: FileItem): String {
     return item.path.removePrefix("app:")
 }
@@ -1729,7 +2495,6 @@ private fun sensitiveAppTag(appName: String, packageName: String): String? {
     }
 }
 
-
 private fun launchInstalledApp(item: FileItem) {
     val packageName = appPackage(item)
 
@@ -1760,12 +2525,6 @@ private fun openAppDetails(packageName: String) {
         startActivity(Intent(Settings.ACTION_SETTINGS))
     }
 }
-
-
-
-
-
-
 
 private fun handleUninstallResult(intent: Intent?) {
     try {
@@ -1958,8 +2717,6 @@ private fun showAppOptions(item: FileItem) {
     builder.show()
 }
 
-
-
 private fun openFile(item: FileItem) {
         if (isAppItem(item)) {
       showAppOptions(item)
@@ -2051,7 +2808,6 @@ private fun openFile(item: FileItem) {
             else -> "*/*"
         }
     }
-
 
     private fun scanFiles() {
         if (!hasStorageAccess()) {
@@ -2274,39 +3030,304 @@ private fun openFile(item: FileItem) {
     }
 }
 
-    
-private fun categoryFiles(category: String): List<FileItem> {
-        val minBytes = minSizeMb.toLong() * 1024L * 1024L
+private fun categoryFiles(title: String): List<FileItem> {
+          fun lowerName(item: FileItem): String = item.name.lowercase(Locale.ROOT)
+          fun lowerPath(item: FileItem): String = item.path.lowercase(Locale.ROOT)
 
-        return when (category) {
-            "Aplicativos" -> installedAppItems()
-            "Novos nas últimas 24h" -> allFiles.filter { isLast24Hours(it) }
+          fun extensionOf(item: FileItem): String {
+              val n = lowerName(item)
+              val dot = n.lastIndexOf(".")
+              return if (dot >= 0 && dot < n.length - 1) n.substring(dot + 1) else ""
+          }
 
-            "Arquivos grandes" -> allFiles.filter { it.size >= minBytes }
-            "Vídeos" -> allFiles.filter { it.category == "Vídeos" && it.size >= minBytes }
-            "Imagens" -> allFiles.filter { it.category == "Imagens" && it.size >= minBytes }
-            "Áudios" -> allFiles.filter { it.category == "Áudios" }
-            "WhatsApp" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("whatsapp") }
-            "Backups" -> allFiles.filter { it.category == "Backups" || it.category == "Backups do WhatsApp" }
-            "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
-            "Downloads" -> allFiles.filter { it.path.lowercase(Locale.ROOT).contains("/download") }
-            "APKs" -> allFiles.filter { it.category == "APKs" }
-            "Fotos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isImageName(it.name) }
-            "Vídeos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isVideoName(it.name) }
-            "Documentos do WhatsApp" -> allFiles.filter {
-                isWhatsAppPath(it.path) && (
-                    isPdfName(it.name) ||
-                    isDocumentName(it.name) ||
-                    normalizedPath(it.path).contains("whatsapp documents") ||
-                    normalizedPath(it.path).contains("whatsapp business documents")
-                )
-            }
-            "Áudios do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) && isAudioName(it.name) }
-            "Backups do WhatsApp" -> allFiles.filter { isWhatsAppBackup(it) }
-            "Todos do WhatsApp" -> allFiles.filter { isWhatsAppPath(it.path) }
-            else -> allFiles
-        }
-    }
+          fun isImage(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".jpg") ||
+                  n.endsWith(".jpeg") ||
+                  n.endsWith(".png") ||
+                  n.endsWith(".webp") ||
+                  n.endsWith(".gif") ||
+                  n.endsWith(".bmp") ||
+                  n.endsWith(".heic") ||
+                  n.endsWith(".heif")
+          }
+
+          fun isVideo(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".mp4") ||
+                  n.endsWith(".mkv") ||
+                  n.endsWith(".mov") ||
+                  n.endsWith(".avi") ||
+                  n.endsWith(".3gp") ||
+                  n.endsWith(".webm")
+          }
+
+          fun isAudio(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".opus") ||
+                  n.endsWith(".mp3") ||
+                  n.endsWith(".m4a") ||
+                  n.endsWith(".wav") ||
+                  n.endsWith(".aac") ||
+                  n.endsWith(".ogg") ||
+                  n.endsWith(".flac")
+          }
+
+          fun isDocument(item: FileItem): Boolean {
+              val n = lowerName(item)
+              return n.endsWith(".pdf") ||
+                  n.endsWith(".doc") ||
+                  n.endsWith(".docx") ||
+                  n.endsWith(".xls") ||
+                  n.endsWith(".xlsx") ||
+                  n.endsWith(".ppt") ||
+                  n.endsWith(".pptx") ||
+                  n.endsWith(".txt") ||
+                  n.endsWith(".zip") ||
+                  n.endsWith(".rar") ||
+                  n.endsWith(".7z") ||
+                  n.endsWith(".csv") ||
+                  n.endsWith(".xml") ||
+                  n.endsWith(".json")
+          }
+
+          fun isApk(item: FileItem): Boolean {
+              return lowerName(item).endsWith(".apk")
+          }
+
+          fun isDownload(item: FileItem): Boolean {
+              val p = lowerPath(item)
+              return p.contains("/download") ||
+                  p.contains("/downloads") ||
+                  p.contains("/baixados")
+          }
+
+          fun isWhatsapp(item: FileItem): Boolean {
+              val p = lowerPath(item)
+              return p.contains("whatsapp") ||
+                  p.contains("com.whatsapp") ||
+                  p.contains("com.whatsapp.w4b")
+          }
+
+          fun isWhatsappBackup(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return isWhatsapp(item) && (
+                  n.contains("msgstore") ||
+                  n.contains("wa.db") ||
+                  p.contains("/databases/") ||
+                  n.endsWith(".crypt") ||
+                  n.endsWith(".crypt12") ||
+                  n.endsWith(".crypt14") ||
+                  n.endsWith(".crypt15") ||
+                  n.endsWith(".db") ||
+                  n.endsWith(".sqlite") ||
+                  n.endsWith(".backup") ||
+                  n.endsWith(".bak")
+              )
+          }
+
+          fun isWhatsappImage(item: FileItem): Boolean = isWhatsapp(item) && isImage(item)
+          fun isWhatsappVideo(item: FileItem): Boolean = isWhatsapp(item) && isVideo(item)
+          fun isWhatsappAudio(item: FileItem): Boolean = isWhatsapp(item) && isAudio(item)
+
+          fun isWhatsappDocument(item: FileItem): Boolean {
+              return isWhatsapp(item) &&
+                  !isWhatsappImage(item) &&
+                  !isWhatsappVideo(item) &&
+                  !isWhatsappAudio(item) &&
+                  !isWhatsappBackup(item) &&
+                  isDocument(item)
+          }
+
+          fun isBackup(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return n.endsWith(".db") ||
+                  n.endsWith(".sqlite") ||
+                  n.contains("crypt") ||
+                  n.endsWith(".bak") ||
+                  n.endsWith(".backup") ||
+                  p.contains("/backup") ||
+                  p.contains("/backups") ||
+                  p.contains("/databases/")
+          }
+
+          fun isCache(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return p.contains("/cache/") ||
+                  p.endsWith("/cache") ||
+                  p.contains("/caches/") ||
+                  p.contains("/code_cache/") ||
+                  p.contains("/app_webview/cache/") ||
+                  p.contains("/temporary/") ||
+                  p.contains("/temp/") ||
+                  p.contains("/tmp/") ||
+                  n.endsWith(".tmp") ||
+                  n.endsWith(".temp") ||
+                  n.endsWith(".cache") ||
+                  n.endsWith(".log") ||
+                  n.endsWith(".nomedia")
+          }
+
+          fun isTemp(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return p.contains("/temporary/") ||
+                  p.contains("/temp/") ||
+                  p.contains("/tmp/") ||
+                  n.endsWith(".tmp") ||
+                  n.endsWith(".temp") ||
+                  n.startsWith("tmp") ||
+                  n.contains(".temp.")
+          }
+
+          fun isThumbnail(item: FileItem): Boolean {
+              val n = lowerName(item)
+              val p = lowerPath(item)
+              return p.contains("/.thumbnails/") ||
+                  p.contains("/thumbnails/") ||
+                  p.contains("/thumb/") ||
+                  p.contains("/thumbs/") ||
+                  n.contains("thumb") ||
+                  n.contains("thumbnail")
+          }
+
+          fun isWhatsappCache(item: FileItem): Boolean {
+              return isWhatsapp(item) && (isCache(item) || isTemp(item) || isThumbnail(item))
+          }
+
+          fun appIsSystemUpdated(item: FileItem): Boolean {
+              val type = item.type.lowercase(Locale.ROOT)
+              return type.contains("sistema atualizado") || type.contains("atualizado")
+          }
+
+          fun lastUsedPackages(): Map<String, Long> {
+              return try {
+                  val usageStatsManager = getSystemService(android.app.usage.UsageStatsManager::class.java)
+                      ?: return emptyMap()
+
+                  val now = System.currentTimeMillis()
+                  val start = now - (180L * 24L * 60L * 60L * 1000L)
+
+                  val stats = usageStatsManager.queryUsageStats(
+                      android.app.usage.UsageStatsManager.INTERVAL_BEST,
+                      start,
+                      now
+                  ) ?: return emptyMap()
+
+                  stats.groupBy { it.packageName }
+                      .mapValues { entry -> entry.value.maxOfOrNull { it.lastTimeUsed } ?: 0L }
+              } catch (_: Exception) {
+                  emptyMap()
+              }
+          }
+
+          fun duplicateCandidates(kind: String): List<FileItem> {
+              val base = allFiles
+                  .asSequence()
+                  .filter { it.size > 10L * 1024L }
+                  .filter { !it.path.startsWith("app:") }
+                  .filter {
+                      when (kind) {
+                          "image" -> isImage(it)
+                          "video" -> isVideo(it)
+                          "audio" -> isAudio(it)
+                          "document" -> isDocument(it)
+                          else -> true
+                      }
+                  }
+                  .filter { extensionOf(it).isNotBlank() }
+                  .sortedByDescending { it.size }
+                  .take(8000)
+                  .toList()
+
+              val grouped = base.groupBy { "${it.size}|${extensionOf(it)}" }
+
+              return grouped.values
+                  .asSequence()
+                  .filter { it.size >= 2 }
+                  .flatMap { group ->
+                      group.sortedByDescending { it.size }.take(20).asSequence()
+                  }
+                  .distinctBy { it.path }
+                  .sortedWith(compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) })
+                  .take(500)
+                  .toList()
+          }
+
+          val now = System.currentTimeMillis()
+          val last24h = now - (24L * 60L * 60L * 1000L)
+          val whatsappAll = allFiles.filter { isWhatsapp(it) }
+
+          return when (title) {
+              "Novos nas últimas 24h" -> allFiles.filter { it.modified >= last24h }
+              "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
+              "Recentes" -> allFiles.sortedByDescending { it.modified }.take(200)
+
+              "Arquivos grandes" -> allFiles.filter { it.size >= minSizeMb * 1024L * 1024L }
+
+              "Vídeos" -> allFiles.filter { isVideo(it) }
+              "Imagens" -> allFiles.filter { isImage(it) }
+              "Áudios" -> allFiles.filter { isAudio(it) }
+
+              "WhatsApp" -> whatsappAll
+              "Todos do WhatsApp" -> whatsappAll
+              "Fotos do WhatsApp" -> allFiles.filter { isWhatsappImage(it) }
+              "Vídeos do WhatsApp" -> allFiles.filter { isWhatsappVideo(it) }
+              "Documentos do WhatsApp" -> allFiles.filter { isWhatsappDocument(it) }
+              "Áudios do WhatsApp" -> allFiles.filter { isWhatsappAudio(it) }
+              "Backups do WhatsApp" -> allFiles.filter { isWhatsappBackup(it) }
+
+              "Duplicados" -> duplicateCandidates("all")
+              "Arquivos duplicados" -> duplicateCandidates("all")
+              "Imagens duplicadas" -> duplicateCandidates("image")
+              "Vídeos duplicados" -> duplicateCandidates("video")
+              "Áudios duplicados" -> duplicateCandidates("audio")
+              "Documentos duplicados" -> duplicateCandidates("document")
+
+              "Cache e temporários" -> allFiles.filter { isCache(it) || isTemp(it) || isThumbnail(it) }
+              "Cache acessível" -> allFiles.filter { isCache(it) }
+              "Temporários" -> allFiles.filter { isTemp(it) }
+              "Miniaturas" -> allFiles.filter { isThumbnail(it) }
+              "Cache do WhatsApp" -> allFiles.filter { isWhatsappCache(it) }
+
+              "Backups" -> allFiles.filter { isBackup(it) && !isWhatsapp(it) }
+              "Sensíveis" -> allFiles.filter { it.risk == "alto" }
+              "Downloads" -> allFiles.filter { isDownload(it) }
+              "Baixados" -> allFiles.filter { isDownload(it) }
+
+              "Aplicativos" -> {
+                  val apps = installedAppItems()
+                  when (appFilterMode) {
+                      "Baixados" -> apps.filter { !isSystemAppItem(it) }
+                      "Sistema" -> apps.filter { isSystemAppItem(it) && !appIsSystemUpdated(it) }
+                      "Sistema atualizado" -> apps.filter { isSystemAppItem(it) && appIsSystemUpdated(it) }
+                      "Não utilizados" -> {
+                          val lastUsed = lastUsedPackages()
+                          val downloaded = apps.filter { !isSystemAppItem(it) }
+
+                          if (lastUsed.isNotEmpty()) {
+                              val cutoff = now - (60L * 24L * 60L * 60L * 1000L)
+                              downloaded.filter {
+                                  ((lastUsed[appPackage(it)] ?: 0L) < cutoff)
+                              }
+                          } else {
+                              downloaded
+                                  .sortedBy { it.modified }
+                                  .take(80)
+                          }
+                      }
+                      else -> apps
+                  }
+              }
+
+              "APKs" -> allFiles.filter { it.category == "APKs" || isApk(it) }
+              "Outros" -> allFiles.filter { it.category == "Outros" }
+              else -> allFiles.filter { it.category == title }
+          }.distinctBy { it.path }
+      }
 
     private fun setupAutoLoadMore(totalItems: Int, shownItems: Int, categoryTitle: String, categoryDesc: String) {
         val activeScroll = root.parent as? ScrollView ?: return
@@ -2343,7 +3364,6 @@ private fun categoryFiles(category: String): List<FileItem> {
             }
         }
     }
-
 
     private fun isLast24Hours(item: FileItem): Boolean {
         val now = System.currentTimeMillis()
@@ -2448,7 +3468,7 @@ private fun categoryFiles(category: String): List<FileItem> {
     private fun drawConfig() {
         removeFloatingListNav()
         currentCategory = ""
-        categoryDisplayLimit = 120
+        categoryDisplayLimit = 40
         root.removeAllViews()
 
         val title = TextView(this)
@@ -2516,7 +3536,17 @@ private fun categoryFiles(category: String): List<FileItem> {
         root.addView(storageCard)
     }
 
-    private fun bottomNav(): LinearLayout {
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+          if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+              if (navigateBackInCleanup()) {
+                  return true
+              }
+          }
+
+          return super.onKeyDown(keyCode, event)
+      }
+
+private fun bottomNav(): LinearLayout {
         val nav = LinearLayout(this)
         nav.orientation = LinearLayout.HORIZONTAL
         nav.gravity = Gravity.CENTER
@@ -2535,7 +3565,6 @@ private fun categoryFiles(category: String): List<FileItem> {
         nav.addView(navItem("⚙\nConfig.", false) {
             drawConfig()
         })
-
 
         nav.addView(navItem("↑", false) {
             val scrollView = root.parent as? android.widget.ScrollView
@@ -2632,6 +3661,211 @@ private fun categoryFiles(category: String): List<FileItem> {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    // T22 - Camada de segurança para exclusão de arquivos.
+    // Objetivo: impedir que app pseudo path, raiz, pasta perigosa ou item inexistente seja apagado por engano.
+
+
+
+    // T25 - Funcoes consolidadas de seguranca, textos e revisao visual leve.
+    private fun cleanupT25IsPseudoAppPath(value: String?): Boolean {
+        val v = value?.trim().orEmpty()
+        return v.startsWith("app:")
+    }
+
+    private fun cleanupT25IsDangerousDeleteTarget(file: java.io.File?): Boolean {
+        if (file == null) return true
+
+        val rawPath = file.path.trim()
+        val absolutePath = try {
+            file.absolutePath.trim()
+        } catch (_: Throwable) {
+            rawPath
+        }
+
+        if (rawPath.isEmpty() || absolutePath.isEmpty()) return true
+        if (cleanupT25IsPseudoAppPath(rawPath) || cleanupT25IsPseudoAppPath(absolutePath)) return true
+
+        val normalized = absolutePath.removeSuffix("/")
+
+        if (normalized == "/") return true
+        if (normalized == "/storage") return true
+        if (normalized == "/storage/emulated") return true
+        if (normalized == "/storage/emulated/0") return true
+        if (normalized == "/sdcard") return true
+        if (normalized == "/mnt") return true
+        if (normalized == "/data") return true
+        if (normalized == "/system") return true
+        if (normalized == "/vendor") return true
+        if (normalized == "/product") return true
+        if (normalized == "/apex") return true
+        if (normalized == "/proc") return true
+        if (normalized == "/dev") return true
+        if (normalized == "/cache") return true
+
+        if (!file.exists()) return true
+
+        val allowedUserStorage =
+            normalized.startsWith("/storage/emulated/0/") ||
+            normalized.startsWith("/sdcard/") ||
+            normalized.startsWith(filesDir.absolutePath + "/") ||
+            normalized.startsWith(cacheDir.absolutePath + "/")
+
+        if (!allowedUserStorage) return true
+
+        return false
+    }
+
+    private fun cleanupT25SafeDeleteFile(file: java.io.File?): Boolean {
+        if (cleanupT25IsDangerousDeleteTarget(file)) return false
+        val safeFile = file ?: return false
+
+        return try {
+            if (!safeFile.isFile) {
+                false
+            } else {
+                safeFile.delete()
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun cleanupT25SafeDeleteRecursively(file: java.io.File?): Boolean {
+        if (cleanupT25IsDangerousDeleteTarget(file)) return false
+        val safeFile = file ?: return false
+
+        return try {
+            if (safeFile.isFile) {
+                safeFile.delete()
+            } else if (safeFile.isDirectory) {
+                val children = safeFile.listFiles()
+                if (children != null) {
+                    for (child in children) {
+                        if (cleanupT25IsDangerousDeleteTarget(child)) return false
+                    }
+                }
+                safeFile.deleteRecursively()
+            } else {
+                false
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun cleanupT25FormatBytes(bytes: Long): String {
+        val safeBytes = if (bytes < 0L) 0L else bytes
+        val kb = 1024.0
+        val mb = kb * 1024.0
+        val gb = mb * 1024.0
+        val tb = gb * 1024.0
+
+        return when {
+            safeBytes >= tb -> String.format(java.util.Locale("pt", "BR"), "%.2f TB", safeBytes / tb)
+            safeBytes >= gb -> String.format(java.util.Locale("pt", "BR"), "%.2f GB", safeBytes / gb)
+            safeBytes >= mb -> String.format(java.util.Locale("pt", "BR"), "%.2f MB", safeBytes / mb)
+            safeBytes >= kb -> String.format(java.util.Locale("pt", "BR"), "%.2f KB", safeBytes / kb)
+            else -> "$safeBytes B"
+        }
+    }
+
+    private fun cleanupT25BuildDeleteSummary(files: List<java.io.File>): String {
+        val validFiles = files.filter { !cleanupT25IsDangerousDeleteTarget(it) && it.isFile }
+        val blockedCount = files.size - validFiles.size
+
+        val totalSize = validFiles.sumOf {
+            try {
+                it.length()
+            } catch (_: Throwable) {
+                0L
+            }
+        }
+
+        val previewLimit = 8
+        val preview = validFiles.take(previewLimit).joinToString(separator = "\n") { file ->
+            val name = file.name.ifBlank { file.absolutePath }
+            val size = try {
+                cleanupT25FormatBytes(file.length())
+            } catch (_: Throwable) {
+                "tamanho desconhecido"
+            }
+            "• $name — $size"
+        }
+
+        val remaining = validFiles.size - validFiles.take(previewLimit).size
+
+        return buildString {
+            append("Arquivos selecionados: ${validFiles.size}\n")
+            append("Espaço estimado: ${cleanupT25FormatBytes(totalSize)}\n")
+
+            if (blockedCount > 0) {
+                append("Itens bloqueados por segurança: $blockedCount\n")
+            }
+
+            if (preview.isNotBlank()) {
+                append("\nPrévia do que será apagado:\n")
+                append(preview)
+                if (remaining > 0) {
+                    append("\n• +$remaining item(ns) não exibido(s) na prévia")
+                }
+            }
+
+            append("\n\nEssa ação tentará apagar somente arquivos permitidos do armazenamento do aparelho.")
+            append("\nDepois de apagados, eles podem não ser recuperáveis.")
+            append("\n\nDeseja continuar?")
+        }
+    }
+
+    private fun cleanupT25CategoryNotice(title: String): String {
+        val t = title.trim().lowercase(java.util.Locale.ROOT)
+
+        return when {
+            t.contains("duplicado") -> "Aviso: duplicados são sugestões encontradas por comparação leve. Confira antes de apagar."
+            t.contains("cache") || t.contains("tempor") || t.contains("miniatura") -> "Aviso: o Android limita a limpeza de cache interno de outros apps. Aqui aparecem apenas itens acessíveis com segurança."
+            t.contains("whatsapp") -> "Aviso: confira arquivos do WhatsApp antes de apagar, principalmente fotos, vídeos, documentos e backups."
+            t.contains("sens") -> "Aviso: arquivos sensíveis podem conter documentos, comprovantes ou informações pessoais. Revise com cuidado."
+            t.contains("apk") -> "Aviso: APKs são instaladores. Apagar APK não desinstala o aplicativo já instalado."
+            t.contains("download") || t.contains("baixado") -> "Aviso: a pasta de downloads pode ter boletos, contratos, fotos e documentos importantes."
+            else -> ""
+        }
+    }
+
+    private fun cleanupT25EmptyMessage(title: String): String {
+        val t = title.trim().lowercase(java.util.Locale.ROOT)
+
+        return when {
+            t.contains("apk") -> "Nenhum instalador APK encontrado nesta análise."
+            t.contains("sens") -> "Nenhum arquivo sensível encontrado nesta análise."
+            t.contains("duplicado") -> "Nenhum possível duplicado encontrado nesta análise."
+            t.contains("cache") || t.contains("tempor") -> "Nenhum cache ou arquivo temporário acessível encontrado nesta análise."
+            t.contains("whatsapp") && t.contains("foto") -> "Nenhuma foto do WhatsApp encontrada nesta análise."
+            t.contains("whatsapp") && t.contains("vídeo") -> "Nenhum vídeo do WhatsApp encontrado nesta análise."
+            t.contains("whatsapp") && t.contains("document") -> "Nenhum documento do WhatsApp encontrado nesta análise."
+            t.contains("whatsapp") && t.contains("áudio") -> "Nenhum áudio do WhatsApp encontrado nesta análise."
+            t.contains("whatsapp") && t.contains("backup") -> "Nenhum backup do WhatsApp encontrado nesta análise."
+            t.contains("whatsapp") -> "Nenhum arquivo do WhatsApp encontrado nesta análise."
+            t.contains("imagem") || t.contains("foto") -> "Nenhuma imagem encontrada nesta análise."
+            t.contains("vídeo") -> "Nenhum vídeo encontrado nesta análise."
+            t.contains("áudio") -> "Nenhum áudio encontrado nesta análise."
+            t.contains("download") || t.contains("baixado") -> "Nenhum arquivo baixado encontrado nesta análise."
+            t.contains("app") || t.contains("aplicativo") -> "Nenhum aplicativo encontrado para este filtro."
+            else -> "Nenhum item encontrado nesta análise."
+        }
+    }
+
+    private fun cleanupT25AppFilterNotice(title: String): String {
+        val t = title.trim().lowercase(java.util.Locale.ROOT)
+
+        return when {
+            t.contains("não utilizado") || t.contains("nao utilizado") -> "Aplicativos não utilizados são estimativas. O Android pode limitar o acesso ao histórico de uso."
+            t.contains("sistema atualizado") -> "Apps de sistema atualizados vieram de fábrica, mas receberam atualização depois. A remoção pode afetar funções do aparelho."
+            t.contains("sistema") -> "Apps de sistema são protegidos pelo Android. Em geral, não devem ser removidos."
+            t.contains("baixado") -> "Apps baixados normalmente foram instalados pelo usuário e podem ser desinstalados pelo Android."
+            else -> ""
+        }
+    }
+
 }
 
 data class FileItem(
