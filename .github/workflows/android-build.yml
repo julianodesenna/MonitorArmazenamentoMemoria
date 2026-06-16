@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -75,17 +76,39 @@ jobs:
           echo "MonitorArmazenamentoMemoria-AAB-PlayStore.aab"
           echo "============================================================"
 
-      - name: Salvar APK de teste como Artifact
-        uses: actions/upload-artifact@v4
+      - name: Salvar APK direto no Actions sem ZIP
+        uses: actions/upload-artifact@v7
         with:
-          name: MonitorArmazenamentoMemoria-APK-Teste
+          name: MonitorArmazenamentoMemoria-APK-Teste.apk
           path: release-files/MonitorArmazenamentoMemoria-APK-Teste.apk
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Salvar AAB para Play Store como Artifact
+      - name: Salvar AAB direto no Actions sem ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+          path: release-files/MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Salvar APK de teste como Artifact ZIP reserva
         uses: actions/upload-artifact@v4
         with:
-          name: MonitorArmazenamentoMemoria-AAB-PlayStore
+          name: MonitorArmazenamentoMemoria-APK-Teste-ZIP-Reserva
+          path: release-files/MonitorArmazenamentoMemoria-APK-Teste.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Salvar AAB Play Store como Artifact ZIP reserva
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonitorArmazenamentoMemoria-AAB-PlayStore-ZIP-Reserva
           path: release-files/MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Criar Release com APK direto
         env:
@@ -110,7 +133,10 @@ jobs:
 
           Arquivos:
           - MonitorArmazenamentoMemoria-APK-Teste.apk
-          - MonitorArmazenamentoMemoria-AAB-PlayStore.aab"
+          - MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+
+          Baixe o APK para instalar no celular:
+          MonitorArmazenamentoMemoria-APK-Teste.apk"
 
           echo "============================================================"
           echo "RESULTADO FINAL: DEU CERTO"
