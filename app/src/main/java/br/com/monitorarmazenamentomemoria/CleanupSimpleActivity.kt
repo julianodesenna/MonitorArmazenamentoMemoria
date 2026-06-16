@@ -3262,6 +3262,7 @@ private fun categoryFiles(title: String): List<FileItem> {
           val whatsappAll = allFiles.filter { isWhatsapp(it) }
 
           return when (title) {
+              "Lixeira" -> emptyList()
               "Novos nas últimas 24h" -> allFiles.filter { it.modified >= last24h }
               "Últimos modificados" -> allFiles.sortedByDescending { it.modified }.take(200)
               "Recentes" -> allFiles.sortedByDescending { it.modified }.take(200)
@@ -3485,6 +3486,8 @@ private fun categoryFiles(title: String): List<FileItem> {
         subtitle.setPadding(0, dp(4), 0, dp(14))
         root.addView(subtitle)
 
+
+
         val appCard = card()
         appCard.addView(titleText("Aplicativo"))
 
@@ -3534,6 +3537,34 @@ private fun categoryFiles(title: String): List<FileItem> {
         storageCard.addView(openStorage)
 
         root.addView(storageCard)
+
+        val monitorCard = card()
+        monitorCard.addView(titleText("Monitor discreto no topo"))
+
+        val monitorText = TextView(this)
+        monitorText.text = if (cleanupN02MonitorEnabled()) {
+            "Ativado. Livre primeiro, RAM em GB e hora. Fixo na tela; desligue somente por aqui."
+        } else {
+            "Desligado. Toque no botão abaixo para ativar."
+        }
+        monitorText.textSize = 15f
+        monitorText.setTextColor(Color.rgb(70, 80, 100))
+        monitorText.setPadding(0, dp(8), 0, dp(12))
+        monitorCard.addView(monitorText)
+
+        val monitorButton = Button(this)
+        monitorButton.text = if (cleanupN02MonitorEnabled()) "Desligar monitor discreto" else "Ligar monitor discreto"
+        cleanupN03XStyleButton(monitorButton, selected = false, danger = cleanupN02MonitorEnabled())
+        monitorButton.setOnClickListener {
+            cleanupN02SetMonitorEnabled(!cleanupN02MonitorEnabled())
+        }
+        monitorCard.addView(monitorButton)
+
+        root.addView(monitorCard)
+        cleanupN03TAddNotificationOptionsCard(root)
+        cleanupN03ZForcePremiumConfigVisual(root)
+
+
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
@@ -3863,6 +3894,424 @@ private fun bottomNav(): LinearLayout {
             t.contains("sistema") -> "Apps de sistema são protegidos pelo Android. Em geral, não devem ser removidos."
             t.contains("baixado") -> "Apps baixados normalmente foram instalados pelo usuário e podem ser desinstalados pelo Android."
             else -> ""
+        }
+    }
+
+
+
+
+
+
+
+
+
+    private fun cleanupN03EOpenTrashShortcut() {
+        val intents = mutableListOf<android.content.Intent>()
+
+        intents.add(android.content.Intent("com.sec.android.app.myfiles.OPEN_TRASH").apply {
+            setPackage("com.sec.android.app.myfiles")
+        })
+
+        intents.add(android.content.Intent("android.intent.action.VIEW").apply {
+            setPackage("com.sec.android.app.myfiles")
+        })
+
+        packageManager.getLaunchIntentForPackage("com.sec.android.app.myfiles")?.let {
+            intents.add(it)
+        }
+
+        packageManager.getLaunchIntentForPackage("com.google.android.documentsui")?.let {
+            intents.add(it)
+        }
+
+        for (intent in intents) {
+            try {
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                android.widget.Toast.makeText(
+                    this,
+                    "Abrindo Lixeira/Meus Arquivos",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return
+            } catch (_: Throwable) {
+            }
+        }
+
+        try {
+            startActivity(android.content.Intent(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS))
+        } catch (_: Throwable) {
+            android.widget.Toast.makeText(
+                this,
+                "Não foi possível abrir a Lixeira neste aparelho",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+
+        private fun cleanupN01StartPremiumStatusNotification() {
+        try {
+            if (!cleanupN02MonitorEnabled()) return
+
+            if (
+                android.os.Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 9101)
+                return
+            }
+
+            PremiumStatusNotificationService.start(this)
+        } catch (_: Throwable) {
+            Toast.makeText(this, "Não foi possível iniciar o monitor", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+        private fun cleanupN02MonitorEnabled(): Boolean {
+        return getSharedPreferences("monitor_premium", MODE_PRIVATE)
+            .getBoolean("top_monitor_enabled", false)
+    }
+
+
+        private fun cleanupN02SetMonitorEnabled(enabled: Boolean) {
+        getSharedPreferences("monitor_premium", MODE_PRIVATE)
+            .edit()
+            .putBoolean("top_monitor_enabled", enabled)
+            .apply()
+
+        if (enabled) {
+            cleanupN01StartPremiumStatusNotification()
+            Toast.makeText(this, "Monitor discreto ativado", Toast.LENGTH_SHORT).show()
+        } else {
+            PremiumStatusNotificationService.stop(this)
+            Toast.makeText(this, "Monitor discreto desligado", Toast.LENGTH_SHORT).show()
+        }
+
+        drawConfig()
+    }
+
+
+        private fun cleanupN03TPrefs(): android.content.SharedPreferences {
+        return getSharedPreferences("monitor_premium", MODE_PRIVATE)
+    }
+
+
+        private fun cleanupN03TRestartMonitorIfEnabled() {
+        try {
+            cleanupN03TPrefs().edit().remove("notification_size").apply()
+            if (cleanupN02MonitorEnabled()) {
+                PremiumStatusNotificationService.start(this)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+
+            private fun cleanupN03TAddNotificationOptionsCard(root: android.widget.LinearLayout) {
+        try {
+            val prefs = cleanupN03TPrefs()
+            prefs.edit().remove("notification_size").apply()
+
+            val currentMode = prefs.getString("notification_mode", "detalhado") ?: "detalhado"
+
+            val optionsCard = card()
+            optionsCard.background = cleanupN03XRoundBg("#FFFFFF", "#E3E8F1", 22, 1)
+            optionsCard.setPadding(dp(18), dp(18), dp(18), dp(18))
+
+            optionsCard.addView(android.widget.TextView(this).apply {
+                text = "Opções da notificação"
+                textSize = 22f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(cleanupN03XColor("#111827"))
+                setPadding(0, 0, 0, dp(6))
+            })
+
+            optionsCard.addView(cleanupN03XDesc(
+                "Escolha como o monitor fixo aparece na tela. Compacto junta as informações. Detalhado separa com espaçamento."
+            ))
+
+            fun addCheck(label: String, key: String, defaultValue: Boolean) {
+                val row = android.widget.LinearLayout(this)
+                row.orientation = android.widget.LinearLayout.HORIZONTAL
+                row.gravity = android.view.Gravity.CENTER_VERTICAL
+                row.setPadding(0, dp(4), 0, dp(4))
+
+                val check = android.widget.CheckBox(this)
+                check.isChecked = prefs.getBoolean(key, defaultValue)
+                try {
+                    check.buttonTintList = android.content.res.ColorStateList.valueOf(cleanupN03XColor("#0F9F7A"))
+                } catch (_: Throwable) {
+                }
+
+                val labelView = android.widget.TextView(this)
+                labelView.text = label
+                labelView.textSize = 15f
+                labelView.setTextColor(cleanupN03XColor("#1F2937"))
+                labelView.setPadding(dp(8), 0, 0, 0)
+
+                row.setOnClickListener {
+                    check.isChecked = !check.isChecked
+                }
+
+                check.setOnCheckedChangeListener { _, checked ->
+                    prefs.edit()
+                        .putBoolean(key, checked)
+                        .remove("notification_size")
+                        .apply()
+                    cleanupN03TRestartMonitorIfEnabled()
+                }
+
+                row.addView(check)
+                row.addView(labelView, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                optionsCard.addView(row)
+            }
+
+            optionsCard.addView(cleanupN03XLabel("Modo da notificação"))
+
+            val modeRow = android.widget.LinearLayout(this)
+            modeRow.orientation = android.widget.LinearLayout.HORIZONTAL
+            modeRow.setPadding(0, 0, 0, dp(12))
+
+            val compactBtn = android.widget.Button(this)
+            compactBtn.text = "Compacto"
+            cleanupN03XStyleButton(compactBtn, currentMode == "compacto", false)
+            compactBtn.setOnClickListener {
+                prefs.edit()
+                    .putString("notification_mode", "compacto")
+                    .remove("notification_size")
+                    .apply()
+                cleanupN03TRestartMonitorIfEnabled()
+                drawConfig()
+                android.widget.Toast.makeText(this, "Compacto aplicado", android.widget.Toast.LENGTH_SHORT).show()
+            }
+
+            val detailedBtn = android.widget.Button(this)
+            detailedBtn.text = "Detalhado"
+            cleanupN03XStyleButton(detailedBtn, currentMode != "compacto", false)
+            detailedBtn.setOnClickListener {
+                prefs.edit()
+                    .putString("notification_mode", "detalhado")
+                    .remove("notification_size")
+                    .apply()
+                cleanupN03TRestartMonitorIfEnabled()
+                drawConfig()
+                android.widget.Toast.makeText(this, "Detalhado aplicado", android.widget.Toast.LENGTH_SHORT).show()
+            }
+
+            val gap = android.view.View(this)
+            modeRow.addView(compactBtn, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            modeRow.addView(gap, android.widget.LinearLayout.LayoutParams(dp(10), 1))
+            modeRow.addView(detailedBtn, android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            optionsCard.addView(modeRow)
+
+            optionsCard.addView(cleanupN03XLabel("Conteúdo exibido"))
+
+            addCheck("Mostrar status OK / ATENÇÃO / CRÍTICO", "show_status", true)
+            addCheck("Mostrar armazenamento livre", "show_free", true)
+            addCheck("Mostrar armazenamento usado", "show_used", true)
+            addCheck("Mostrar RAM", "show_ram", true)
+            addCheck("Mostrar hora da atualização", "show_time", true)
+
+            root.addView(optionsCard)
+        } catch (_: Throwable) {
+        }
+    }
+
+
+                private fun cleanupN03XColor(hex: String): Int {
+        return android.graphics.Color.parseColor(hex)
+    }
+
+
+                private fun cleanupN03XRoundBg(
+        fill: String,
+        stroke: String,
+        radiusDp: Int = 14,
+        strokeDp: Int = 1
+    ): android.graphics.drawable.GradientDrawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = dp(radiusDp).toFloat()
+            setColor(cleanupN03XColor(fill))
+            setStroke(dp(strokeDp), cleanupN03XColor(stroke))
+        }
+    }
+
+
+    private fun cleanupN03XStyleButton(
+        button: android.widget.Button,
+        selected: Boolean = false,
+        danger: Boolean = false
+    ) {
+        if (danger) {
+            button.setTextColor(cleanupN03XColor("#FFFFFF"))
+            button.background = cleanupN03XRoundBg("#111827", "#111827", 14, 1)
+        } else if (selected) {
+            button.setTextColor(cleanupN03XColor("#FFFFFF"))
+            button.background = cleanupN03XRoundBg("#111827", "#111827", 14, 1)
+        } else {
+            button.setTextColor(cleanupN03XColor("#111827"))
+            button.background = cleanupN03XRoundBg("#FFFFFF", "#111827", 14, 1)
+        }
+
+        button.textSize = 13f
+        button.setTypeface(null, android.graphics.Typeface.BOLD)
+        button.setPadding(dp(10), dp(10), dp(10), dp(10))
+        button.minHeight = dp(48)
+        button.isAllCaps = false
+    }
+
+
+    private fun cleanupN03XLabel(textValue: String): android.widget.TextView {
+        return android.widget.TextView(this).apply {
+            text = textValue
+            textSize = 13f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(cleanupN03XColor("#111827"))
+            setPadding(0, dp(12), 0, dp(6))
+        }
+    }
+
+
+    private fun cleanupN03XDesc(textValue: String): android.widget.TextView {
+        return android.widget.TextView(this).apply {
+            text = textValue
+            textSize = 14f
+            setTextColor(cleanupN03XColor("#4B5563"))
+            setLineSpacing(2f, 1.05f)
+            setPadding(0, dp(4), 0, dp(12))
+        }
+    }
+
+
+            private fun cleanupN03ZStyleButtonByText(button: android.widget.Button) {
+        try {
+            val label = button.text?.toString()?.trim() ?: ""
+            val normalized = label.uppercase()
+
+            val prefs = getSharedPreferences("monitor_premium", MODE_PRIVATE)
+            val mode = prefs.getString("notification_mode", "detalhado") ?: "detalhado"
+
+            val selected = when (normalized) {
+                "COMPACTO" -> mode == "compacto"
+                "DETALHADO" -> mode != "compacto"
+                else -> false
+            }
+
+            val danger = normalized.contains("DESLIGAR MONITOR")
+
+            when {
+                selected -> {
+                    button.setTextColor(cleanupN03XColor("#FFFFFF"))
+                    button.background = cleanupN03XRoundBg("#111827", "#111827", 16, 1)
+                }
+
+                danger -> {
+                    button.setTextColor(cleanupN03XColor("#FFFFFF"))
+                    button.background = cleanupN03XRoundBg("#111827", "#111827", 16, 1)
+                }
+
+                normalized.contains("CONFIGURAÇÕES DO APP") ||
+                normalized.contains("ARMAZENAMENTO DO ANDROID") ||
+                normalized.contains("LIGAR MONITOR") ||
+                normalized.contains("COMPACTO") ||
+                normalized.contains("DETALHADO") -> {
+                    button.setTextColor(cleanupN03XColor("#111827"))
+                    button.background = cleanupN03XRoundBg("#FFFFFF", "#111827", 16, 1)
+                }
+
+                else -> {
+                    button.setTextColor(cleanupN03XColor("#111827"))
+                    button.background = cleanupN03XRoundBg("#F8FAFC", "#D1D5DB", 14, 1)
+                }
+            }
+
+            button.textSize = 13f
+            button.setTypeface(null, android.graphics.Typeface.BOLD)
+            button.setPadding(dp(10), dp(10), dp(10), dp(10))
+            button.minHeight = dp(50)
+            button.isAllCaps = false
+        } catch (_: Throwable) {
+        }
+    }
+
+
+            private fun cleanupN03ZApplyTextPremium(view: android.view.View) {
+        try {
+            if (view is android.widget.TextView && view !is android.widget.Button && view !is android.widget.CheckBox) {
+                val value = view.text?.toString()?.trim() ?: ""
+
+                if (
+                    value == "Aplicativo" ||
+                    value == "Armazenamento" ||
+                    value == "Monitor discreto no topo" ||
+                    value == "Opções da notificação" ||
+                    value == "Modo da notificação" ||
+                    value == "Conteúdo exibido"
+                ) {
+                    view.setTextColor(cleanupN03XColor("#111827"))
+                    view.setTypeface(null, android.graphics.Typeface.BOLD)
+                } else {
+                    view.setTextColor(cleanupN03XColor("#4B5563"))
+                }
+            }
+
+            if (view is android.widget.CheckBox) {
+                view.setTextColor(cleanupN03XColor("#1F2937"))
+                try {
+                    view.buttonTintList = android.content.res.ColorStateList.valueOf(cleanupN03XColor("#0F9F7A"))
+                } catch (_: Throwable) {
+                }
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+
+            private fun cleanupN03ZWalkPremium(view: android.view.View) {
+        try {
+            if (view is android.widget.Button) {
+                cleanupN03ZStyleButtonByText(view)
+            } else {
+                cleanupN03ZApplyTextPremium(view)
+            }
+
+            if (view is android.view.ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    cleanupN03ZWalkPremium(view.getChildAt(i))
+                }
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+
+            private fun cleanupN03ZForcePremiumConfigVisual(root: android.widget.LinearLayout) {
+        try {
+            root.setBackgroundColor(cleanupN03XColor("#F6F8FC"))
+            cleanupN03ZWalkPremium(root)
+
+            if (root.findViewWithTag<android.view.View>("N03Z_BOTTOM_SPACER") == null) {
+                val spacer = android.view.View(this)
+                spacer.tag = "N03Z_BOTTOM_SPACER"
+                root.addView(
+                    spacer,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(120)
+                    )
+                )
+            }
+
+            root.post {
+                try {
+                    cleanupN03ZWalkPremium(root)
+                } catch (_: Throwable) {
+                }
+            }
+        } catch (_: Throwable) {
         }
     }
 
