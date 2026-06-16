@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build APK and AAB
@@ -26,16 +29,93 @@ jobs:
           gradle-version: 9.5.1
 
       - name: Compilar APK de teste e AAB da Play Store
-        run: gradle :app:assembleDebug :app:bundleRelease
+        run: |
+          echo "============================================================"
+          echo "COMPILANDO APK DE TESTE E AAB DA PLAY STORE"
+          echo "============================================================"
+          gradle :app:assembleDebug :app:bundleRelease
+          echo "============================================================"
+          echo "RESULTADO FINAL: BUILD FINALIZADO"
+          echo "============================================================"
 
-      - name: Salvar APK de teste
+      - name: Preparar arquivos com nomes diretos
+        run: |
+          echo "============================================================"
+          echo "PREPARANDO ARQUIVOS PARA DOWNLOAD"
+          echo "============================================================"
+
+          mkdir -p release-files
+
+          APK_ORIGINAL="$(find app/build/outputs/apk/debug -name '*.apk' | head -n 1)"
+          AAB_ORIGINAL="$(find app/build/outputs/bundle/release -name '*.aab' | head -n 1)"
+
+          if [ -z "$APK_ORIGINAL" ]; then
+            echo "RESULTADO FINAL: DEU ERRO"
+            echo "APK não encontrado."
+            exit 1
+          fi
+
+          if [ -z "$AAB_ORIGINAL" ]; then
+            echo "RESULTADO FINAL: DEU ERRO"
+            echo "AAB não encontrado."
+            exit 1
+          fi
+
+          cp "$APK_ORIGINAL" release-files/MonitorArmazenamentoMemoria-APK-Teste.apk
+          cp "$AAB_ORIGINAL" release-files/MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+
+          echo "Arquivos preparados:"
+          ls -lh release-files
+
+          echo "============================================================"
+          echo "RESULTADO FINAL: DEU CERTO"
+          echo "APK direto:"
+          echo "MonitorArmazenamentoMemoria-APK-Teste.apk"
+          echo "AAB direto:"
+          echo "MonitorArmazenamentoMemoria-AAB-PlayStore.aab"
+          echo "============================================================"
+
+      - name: Salvar APK de teste como Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MonitorArmazenamentoMemoria-APK-Teste
-          path: app/build/outputs/apk/debug/*.apk
+          path: release-files/MonitorArmazenamentoMemoria-APK-Teste.apk
 
-      - name: Salvar AAB para Play Store
+      - name: Salvar AAB para Play Store como Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MonitorArmazenamentoMemoria-AAB-PlayStore
-          path: app/build/outputs/bundle/release/*.aab
+          path: release-files/MonitorArmazenamentoMemoria-AAB-PlayStore.aab
+
+      - name: Criar Release com APK direto
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "============================================================"
+          echo "CRIANDO RELEASE COM APK DIRETO"
+          echo "============================================================"
+
+          DATA_HORA="$(date +'%Y%m%d-%H%M%S')"
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          TAG_NAME="apk-${DATA_HORA}-${SHORT_SHA}"
+          RELEASE_NAME="APK Teste ${DATA_HORA}"
+
+          gh release create "$TAG_NAME" \
+            release-files/MonitorArmazenamentoMemoria-APK-Teste.apk \
+            release-files/MonitorArmazenamentoMemoria-AAB-PlayStore.aab \
+            --title "$RELEASE_NAME" \
+            --notes "APK de teste gerado automaticamente pelo GitHub Actions.
+
+          Commit: ${{ github.sha }}
+
+          Arquivos:
+          - MonitorArmazenamentoMemoria-APK-Teste.apk
+          - MonitorArmazenamentoMemoria-AAB-PlayStore.aab"
+
+          echo "============================================================"
+          echo "RESULTADO FINAL: DEU CERTO"
+          echo "RELEASE CRIADA:"
+          echo "$RELEASE_NAME"
+          echo "TAG:"
+          echo "$TAG_NAME"
+          echo "============================================================"
