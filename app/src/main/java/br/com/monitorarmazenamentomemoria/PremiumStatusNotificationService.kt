@@ -65,9 +65,15 @@ class PremiumStatusNotificationService : Service() {
     private fun buildNotification(): Notification {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-        // AVISO:
-        // Remove configuração antiga problemática de Pequeno/Médio/Grande.
-        // Não reativar notification_size.
+        // AVISOS IMPORTANTES:
+        // NÃO reativar Pequeno/Médio/Grande.
+        // NÃO reativar notification_size.
+        // NÃO usar RemoteViews.
+        // NÃO usar Bitmap.
+        // NÃO usar Spannable.
+        // NÃO usar ForegroundColorSpan.
+        // NÃO usar StyleSpan.
+        // NÃO mexer na trava da notificação.
         prefs.edit().remove("notification_size").apply()
 
         val mode = prefs.getString("notification_mode", "detalhado") ?: "detalhado"
@@ -125,20 +131,54 @@ class PremiumStatusNotificationService : Service() {
             )
         }
 
-        val openIntent = packageManager.getLaunchIntentForPackage(packageName)
-        val openPending = PendingIntent.getActivity(this, 1, openIntent, flags())
+        val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        } ?: Intent(this, CleanupSimpleActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
 
-        val refresh = Intent(this, PremiumStatusNotificationService::class.java).apply {
+        val openPending = PendingIntent.getActivity(
+            this,
+            1,
+            openAppIntent,
+            flags()
+        )
+
+        val refreshIntent = Intent(this, PremiumStatusNotificationService::class.java).apply {
             action = ACTION_REFRESH
         }
 
-        val refreshPending = PendingIntent.getService(this, 2, refresh, flags())
+        val refreshPending = PendingIntent.getService(
+            this,
+            2,
+            refreshIntent,
+            flags()
+        )
 
-        val relock = Intent(this, PremiumStatusNotificationService::class.java).apply {
+        val relockIntent = Intent(this, PremiumStatusNotificationService::class.java).apply {
             action = ACTION_RELOCK
         }
 
-        val relockPending = PendingIntent.getService(this, 3, relock, flags())
+        val relockPending = PendingIntent.getService(
+            this,
+            3,
+            relockIntent,
+            flags()
+        )
+
+        val openLimpezaIntent = Intent(this, CleanupSimpleActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("open_tab", "limpeza")
+            putExtra("open_screen", "limpeza")
+            putExtra("source", "notification_action")
+        }
+
+        val openLimpezaPending = PendingIntent.getActivity(
+            this,
+            4,
+            openLimpezaIntent,
+            flags()
+        )
 
         val builder: Notification.Builder =
             if (Build.VERSION.SDK_INT >= 26) {
@@ -161,7 +201,9 @@ class PremiumStatusNotificationService : Service() {
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setPriority(Notification.PRIORITY_MIN)
-            .addAction(android.R.drawable.ic_dialog_info, "Atualizar", refreshPending)
+            .addAction(android.R.drawable.ic_popup_sync, "Atualizar", refreshPending)
+            .addAction(android.R.drawable.ic_menu_view, "Abrir app", openPending)
+            .addAction(android.R.drawable.ic_menu_manage, "Limpeza", openLimpezaPending)
 
         if (Build.VERSION.SDK_INT >= 31) {
             try {
