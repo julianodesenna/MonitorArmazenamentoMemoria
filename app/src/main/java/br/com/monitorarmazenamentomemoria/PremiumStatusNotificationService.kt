@@ -385,14 +385,15 @@ class PremiumStatusNotificationService : Service() {
 
         lines.add("Fixo")
 
-        if (showCache) {
+        val showCacheN05iFix5 = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("show_cache", true)
+        if (showCacheN05iFix5) {
             val cacheN05iFix4 = NotificationCacheSummaryHelper.getSummary(this, forceNextCacheRefreshN05iFix4)
             forceNextCacheRefreshN05iFix4 = false
             if (cacheN05iFix4.show) {
                 lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim())
             }
         }
-        // N05I_FIX4_CACHE_VISIVEL_ANTES_ATUALIZADO
+        // N05I_FIX5_CORRIGE_SHOWCACHE_VISIVEL_ANTES_ATUALIZADO
         if (showTime) {
             lines.add("")
             lines.add("Atualizado às $time")
