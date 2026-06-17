@@ -11,6 +11,8 @@ import java.util.*
 
 class PremiumStatusNotificationService : Service() {
 
+    private var forceNextCacheRefreshN05iFix4: Boolean = false
+
     private var forceNextCacheRefreshN05iFix3: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -22,6 +24,10 @@ class PremiumStatusNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val actionN05iFix4 = intent?.action
+        if (actionN05iFix4 == ACTION_REFRESH || actionN05iFix4 == ACTION_UPDATE) {
+            forceNextCacheRefreshN05iFix4 = true
+        }
         val actionN05iFix3 = intent?.action
         if (actionN05iFix3 == ACTION_REFRESH || actionN05iFix3 == ACTION_UPDATE) {
             forceNextCacheRefreshN05iFix3 = true
@@ -379,6 +385,14 @@ class PremiumStatusNotificationService : Service() {
 
         lines.add("Fixo")
 
+        if (showCache) {
+            val cacheN05iFix4 = NotificationCacheSummaryHelper.getSummary(this, forceNextCacheRefreshN05iFix4)
+            forceNextCacheRefreshN05iFix4 = false
+            if (cacheN05iFix4.show) {
+                lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim())
+            }
+        }
+        // N05I_FIX4_CACHE_VISIVEL_ANTES_ATUALIZADO
         if (showTime) {
             lines.add("")
             lines.add("Atualizado às $time")
