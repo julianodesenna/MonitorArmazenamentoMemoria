@@ -100,6 +100,34 @@ super.onCreate(savedInstanceState)
           super.onBackPressed()
       }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        /*
+         * N05E2_ligar_selecao_apps_desinstalar_em_lote
+         *
+         * Recebe o retorno oficial do Android após cada confirmação de desinstalação
+         * e entrega para o BatchUninstallManager continuar a fila.
+         *
+         * NÃO tentar desinstalar silenciosamente.
+         * NÃO usar root.
+         * NÃO usar ADB.
+         * NÃO usar Shizuku.
+         */
+        if (BatchUninstallManager.handleActivityResult(this, requestCode, resultCode)) {
+            selectedFiles.clear()
+
+            if (::root.isInitialized) {
+                try {
+                    scanFiles()
+                } catch (_: Throwable) {
+                }
+            }
+
+            return
+        }
+    }
+
     private fun buildScreen() {
         val main = LinearLayout(this)
         main.orientation = LinearLayout.VERTICAL
@@ -1563,13 +1591,15 @@ val yearTitle = TextView(this)
 
         addWeightedChip(selectRow, chipButton("Exibidos", false) {
             files.forEach { selectedFiles.add(it.path) }
-            Toast.makeText(this, "${files.size} arquivos exibidos selecionados", Toast.LENGTH_SHORT).show()
+            val itemWord = if (categoryTitle == "Aplicativos") "apps exibidos" else "arquivos exibidos"
+            Toast.makeText(this, "${files.size} $itemWord selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
         })
 
         addWeightedChip(selectRow, chipButton("Todos", false) {
             allCategoryItems.forEach { selectedFiles.add(it.path) }
-            Toast.makeText(this, "${allCategoryItems.size} arquivos da categoria selecionados", Toast.LENGTH_SHORT).show()
+            val itemWord = if (categoryTitle == "Aplicativos") "apps da categoria" else "arquivos da categoria"
+            Toast.makeText(this, "${allCategoryItems.size} $itemWord selecionados", Toast.LENGTH_SHORT).show()
             showCategory(categoryTitle, categoryDesc)
         })
 
@@ -1579,20 +1609,33 @@ val yearTitle = TextView(this)
         actionRow.orientation = LinearLayout.HORIZONTAL
         actionRow.setPadding(0, dp(4), 0, 0)
 
-        addWeightedChip(actionRow, chipButton("Compartilhar", false) {
-            shareSelectedFiles()
-        })
+        if (categoryTitle == "Aplicativos") {
+            val uninstallSelectedButton = chipButton("Desinstalar", false) {
+                batchUninstallSelectedApps()
+            }
+            uninstallSelectedButton.setTextColor(Color.rgb(150, 38, 38))
+            uninstallSelectedButton.background = rounded(
+                Color.rgb(255, 245, 245),
+                Color.rgb(245, 190, 190),
+                dp(18)
+            )
+            addWeightedChip(actionRow, uninstallSelectedButton)
+        } else {
+            addWeightedChip(actionRow, chipButton("Compartilhar", false) {
+                shareSelectedFiles()
+            })
 
-        val deleteButton = chipButton("Excluir", false) {
-            confirmDeleteSelectedFiles()
+            val deleteButton = chipButton("Excluir", false) {
+                confirmDeleteSelectedFiles()
+            }
+            deleteButton.setTextColor(Color.rgb(150, 38, 38))
+            deleteButton.background = rounded(
+                Color.rgb(255, 245, 245),
+                Color.rgb(245, 190, 190),
+                dp(18)
+            )
+            addWeightedChip(actionRow, deleteButton)
         }
-        deleteButton.setTextColor(Color.rgb(150, 38, 38))
-        deleteButton.background = rounded(
-            Color.rgb(255, 245, 245),
-            Color.rgb(245, 190, 190),
-            dp(18)
-        )
-        addWeightedChip(actionRow, deleteButton)
 
         val clearButton = chipButton("Limpar", false) {
             selectedFiles.clear()
@@ -1615,7 +1658,8 @@ val yearTitle = TextView(this)
 
         val summary = TextView(this)
         val yearInfo = if (yearFilter == "Todos") "" else " • ano: $yearFilter"
-        summary.text = "${files.size} de ${allCategoryItems.size} arquivos mostrados$yearInfo • exibidos: ${formatSize(files.sumOf { it.size })} • total: ${formatSize(allCategoryItems.sumOf { it.size })}"
+        val listItemWord = if (categoryTitle == "Aplicativos") "apps mostrados" else "arquivos mostrados"
+        summary.text = "${files.size} de ${allCategoryItems.size} $listItemWord$yearInfo • exibidos: ${formatSize(files.sumOf { it.size })} • total: ${formatSize(allCategoryItems.sumOf { it.size })}"
         summary.textSize = 14f
         summary.setTextColor(Color.rgb(80, 90, 110))
         summary.setPadding(0, dp(4), 0, dp(12))
@@ -2193,6 +2237,91 @@ private fun updateSelectedInfo() {
         }
     }
 
+    private fun batchUninstallSelectedApps() {
+        /*
+         * N05E2_ligar_selecao_apps_desinstalar_em_lote
+         *
+         * Liga os checkboxes da categoria Aplicativos ao BatchUninstallManager.
+         *
+         * Fluxo seguro:
+         * 1. Selecionar vários apps.
+         * 2. Tocar em Desinstalar.
+         * 3. Filtrar apps do sistema/protegidos.
+         * 4. Chamar a desinstalação oficial do Android em fila.
+         * 5. O Android confirma um por um.
+         *
+         * NÃO apagar silenciosamente.
+         * NÃO tentar remover app do sistema.
+         * NÃO tentar remover o próprio app.
+         */
+        val selected = selectedItemsForActions().filter { isAppItem(it) }
+
+        if (selected.isEmpty()) {
+            Toast.makeText(this, "Nenhum aplicativo selecionado", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val ownPackage = packageName
+        val systemApps = selected.filter { isSystemAppItem(it) }
+        val ownApp = selected.filter { appPackage(it) == ownPackage }
+        val allowedApps = selected
+            .filter { !isSystemAppItem(it) }
+            .filter { appPackage(it) != ownPackage }
+            .distinctBy { appPackage(it) }
+
+        if (allowedApps.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("Nenhum app pode ser desinstalado em lote")
+                .setMessage(
+                    "Os aplicativos selecionados parecem ser do sistema, protegidos pelo Android ou o próprio app atual.\n\n" +
+                    "Para apps do sistema, use Detalhes do Android, quando disponível."
+                )
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+
+        val sensitiveCount = allowedApps.count { it.risk == "alto" || sensitiveAppTag(it.name, appPackage(it)) != null }
+
+        val message = buildString {
+            append("Aplicativos selecionados: ${selected.size}\n")
+            append("Entrarão na fila: ${allowedApps.size}\n")
+
+            if (systemApps.isNotEmpty()) {
+                append("Ignorados por serem do sistema/protegidos: ${systemApps.size}\n")
+            }
+
+            if (ownApp.isNotEmpty()) {
+                append("Ignorado por ser este app: ${ownApp.size}\n")
+            }
+
+            if (sensitiveCount > 0) {
+                append("\nAtenção: $sensitiveCount app(s) sensível(eis), financeiro(s), conversa(s), autenticação ou nuvem.\n")
+            }
+
+            append("\nO Android vai pedir confirmação para cada aplicativo.")
+            append("\nDepois de confirmar um, o app tentará continuar para o próximo.")
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Desinstalar apps selecionados?")
+            .setMessage(message)
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Continuar") { _, _ ->
+                val targets = allowedApps.map { app ->
+                    BatchUninstallManager.Target(
+                        packageName = appPackage(app),
+                        label = app.name,
+                        sizeText = formatSize(app.size),
+                        sensitive = app.risk == "alto" || sensitiveAppTag(app.name, appPackage(app)) != null
+                    )
+                }
+
+                BatchUninstallManager.start(this, targets)
+            }
+            .show()
+    }
+
     private fun confirmDeleteSelectedFiles() {
     if (selectedFiles.isEmpty()) {
         Toast.makeText(this, "Nenhum arquivo selecionado", Toast.LENGTH_SHORT).show()
@@ -2384,6 +2513,18 @@ override fun onNewIntent(intent: Intent?) {
 
 override fun onResume() {
         super.onResume()
+
+        /*
+         * N05E2_ligar_selecao_apps_desinstalar_em_lote
+         *
+         * Se houver fila pendente, o gerenciador mantém o controle.
+         * A lista é reanalisada para refletir apps removidos.
+         */
+        try {
+            BatchUninstallManager.resumeIfNeeded(this)
+        } catch (_: Throwable) {
+        }
+
         if (::root.isInitialized && hasStorageAccess()) {
             scanFiles()
         }
