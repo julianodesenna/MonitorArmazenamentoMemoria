@@ -45,6 +45,16 @@ import java.util.UUID
  */
 object AppStorageStatsHelper {
 
+    private const val STATS_CACHE_MS: Long = 5L * 60L * 1000L
+
+    private data class CachedStatsEntry(
+        val createdAt: Long,
+        val value: AppStorageStats?
+    )
+
+    private val statsCache = linkedMapOf<String, CachedStatsEntry>()
+
+
     data class AppStorageStats(
         val appBytes: Long,
         val dataBytes: Long,
@@ -140,11 +150,24 @@ object AppStorageStatsHelper {
             return null
         }
 
+        val now = System.currentTimeMillis()
+        val cacheKey = packageName
+
+        synchronized(statsCache) {
+            val cached = statsCache[cacheKey]
+            if (cached != null && now - cached.createdAt <= STATS_CACHE_MS) {
+                return cached.value
+            }
+        }
+
         if (!hasUsageAccess(context)) {
+            synchronized(statsCache) {
+                statsCache[cacheKey] = CachedStatsEntry(now, null)
+            }
             return null
         }
 
-        return try {
+        val result = try {
             val packageManager = context.packageManager
             val appInfo = packageManager.getApplicationInfo(packageName, 0)
 
@@ -201,6 +224,16 @@ object AppStorageStatsHelper {
         } catch (_: Throwable) {
             null
         }
+
+        synchronized(statsCache) {
+            statsCache[cacheKey] = CachedStatsEntry(now, result)
+            while (statsCache.size > 80) {
+                val firstKey = statsCache.keys.firstOrNull() ?: break
+                statsCache.remove(firstKey)
+            }
+        }
+
+        return result
     }
 
     private fun tryAddUuidForPath(

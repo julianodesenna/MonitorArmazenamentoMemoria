@@ -3178,95 +3178,158 @@ private fun openFile(item: FileItem) {
     }
 
     private fun installedAppItems(): List<FileItem> {
-    return try {
-        @Suppress("DEPRECATION")
-        val packages = packageManager.getInstalledPackages(0)
+        return try {
+            @Suppress("DEPRECATION")
+            val packages = packageManager.getInstalledPackages(0)
 
-        packages.mapNotNull { pkg ->
-            val appInfo = pkg.applicationInfo ?: return@mapNotNull null
-
-            val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-            val isUpdatedSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-
-            val appKind = when {
-                isSystem && !isUpdatedSystem -> "sistema"
-                isUpdatedSystem -> "sistema atualizado"
-                else -> "baixado"
-            }
-
-            val appName = try {
-                appInfo.loadLabel(packageManager).toString()
-            } catch (_: Exception) {
-                pkg.packageName
-            }
-
-            val sourceFiles = mutableListOf<File>()
-
-            try {
-                val src = appInfo.sourceDir
-                if (!src.isNullOrBlank()) sourceFiles.add(File(src))
-            } catch (_: Exception) {
-            }
-
-            try {
-                val pub = appInfo.publicSourceDir
-                if (!pub.isNullOrBlank()) sourceFiles.add(File(pub))
-            } catch (_: Exception) {
-            }
-
-            try {
-                appInfo.splitSourceDirs?.forEach { split ->
-                    if (!split.isNullOrBlank()) sourceFiles.add(File(split))
-                }
-            } catch (_: Exception) {
-            }
-
-            val detectedSize = sourceFiles
-                .distinctBy { it.absolutePath }
-                .sumOf { f -> if (f.exists() && f.isFile) f.length() else 0L }
-
-            val androidStats = AppStorageStatsHelper.query(this, pkg.packageName)
-            val size = androidStats?.totalBytes ?: detectedSize
-
-            val version = pkg.versionName ?: "versão não informada"
-            val sensitiveTag = sensitiveAppTag(appName, pkg.packageName)
-
-            val baseTypeText = if (sensitiveTag != null) {
-                "Aplicativo • $appKind • $sensitiveTag • versão $version • pacote ${pkg.packageName}"
-            } else {
-                "Aplicativo • $appKind • versão $version • pacote ${pkg.packageName}"
-            }
-
-            val sizeTypeText = if (androidStats != null) {
-                baseTypeText + "\nAndroid: App ${formatSize(androidStats.appBytes)} • Dados ${formatSize(androidStats.dataBytes)} • Cache ${formatSize(androidStats.cacheBytes)} • Total ${formatSize(androidStats.totalBytes)}"
-            } else {
-                baseTypeText + "\nTamanho detectado: ${formatSize(detectedSize)} • total real depende do Acesso ao uso"
-            }
-
-            val riskLevel = if (sensitiveTag != null) "alto" else "normal"
-
-            FileItem(
-                name = appName,
-                path = "app:${pkg.packageName}",
-                size = size,
-                modified = pkg.lastUpdateTime,
-                type = sizeTypeText,
-                category = "Aplicativos",
-                risk = riskLevel
+            data class AppDraft(
+                val appName: String,
+                val packageName: String,
+                val appKind: String,
+                val version: String,
+                val sensitiveTag: String?,
+                val detectedSize: Long,
+                val modified: Long
             )
-        }.sortedWith(
-            compareBy<FileItem> {
-                when {
-                    it.type.contains("Aplicativo • baixado") -> 0
-                    it.type.contains("sistema atualizado") -> 1
-                    else -> 2
+
+            val drafts = packages.mapNotNull { pkg ->
+                val appInfo = pkg.applicationInfo ?: return@mapNotNull null
+
+                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+
+                val appKind = when {
+                    isSystem && !isUpdatedSystem -> "sistema"
+                    isUpdatedSystem -> "sistema atualizado"
+                    else -> "baixado"
                 }
-            }.thenByDescending { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
-        )
-    } catch (_: Exception) {
-        emptyList()
+
+                val appName = try {
+                    appInfo.loadLabel(packageManager).toString()
+                } catch (_: Exception) {
+                    pkg.packageName
+                }
+
+                val sourceFiles = mutableListOf<File>()
+
+                try {
+                    val src = appInfo.sourceDir
+                    if (!src.isNullOrBlank()) sourceFiles.add(File(src))
+                } catch (_: Exception) {
+                }
+
+                try {
+                    val pub = appInfo.publicSourceDir
+                    if (!pub.isNullOrBlank()) sourceFiles.add(File(pub))
+                } catch (_: Exception) {
+                }
+
+                try {
+                    appInfo.splitSourceDirs?.forEach { split ->
+                        if (!split.isNullOrBlank()) sourceFiles.add(File(split))
+                    }
+                } catch (_: Exception) {
+                }
+
+                val detectedSize = sourceFiles
+                    .distinctBy { it.absolutePath }
+                    .sumOf { f -> if (f.exists() && f.isFile) f.length() else 0L }
+
+                val version = pkg.versionName ?: "versão não informada"
+                val sensitiveTag = sensitiveAppTag(appName, pkg.packageName)
+
+                AppDraft(
+                    appName = appName,
+                    packageName = pkg.packageName,
+                    appKind = appKind,
+                    version = version,
+                    sensitiveTag = sensitiveTag,
+                    detectedSize = detectedSize,
+                    modified = pkg.lastUpdateTime
+                )
+            }.sortedWith(
+                compareBy<AppDraft> {
+                    when (it.appKind) {
+                        "baixado" -> 0
+                        "sistema atualizado" -> 1
+                        else -> 2
+                    }
+                }.thenByDescending { it.detectedSize }.thenBy { it.appName.lowercase(Locale.ROOT) }
+            )
+
+            /*
+             * N05H_FIX1_modo_leve_tamanho_real_apps
+             *
+             * O teste mostrou que StorageStatsManager funciona, mas consultar todos os
+             * aplicativos de uma vez deixa a tela pesada e pode causar ANR.
+             *
+             * Correção segura:
+             * - lista todos os apps normalmente;
+             * - consulta App/Dados/Cache/Total somente para poucos apps mais relevantes;
+             * - mantém o tamanho detectado para o restante;
+             * - evita travar a rolagem;
+             * - não limpa cache, não apaga dados, não usa root/ADB/Shizuku.
+             */
+            val usageAllowed = AppStorageStatsHelper.hasUsageAccess(this)
+            val realStatsByPackage = mutableMapOf<String, AppStorageStatsHelper.AppStorageStats>()
+
+            if (usageAllowed) {
+                val realStatsLimit = 15
+
+                val candidates = drafts
+                    .filter { it.appKind != "sistema" }
+                    .take(realStatsLimit)
+
+                for (draft in candidates) {
+                    val stats = AppStorageStatsHelper.query(this, draft.packageName)
+                    if (stats != null) {
+                        realStatsByPackage[draft.packageName] = stats
+                    }
+                }
+            }
+
+            drafts.map { draft ->
+                val androidStats = realStatsByPackage[draft.packageName]
+                val size = androidStats?.totalBytes ?: draft.detectedSize
+
+                val baseTypeText = if (draft.sensitiveTag != null) {
+                    "Aplicativo • ${draft.appKind} • ${draft.sensitiveTag} • versão ${draft.version} • pacote ${draft.packageName}"
+                } else {
+                    "Aplicativo • ${draft.appKind} • versão ${draft.version} • pacote ${draft.packageName}"
+                }
+
+                val sizeTypeText = if (androidStats != null) {
+                    baseTypeText + "\nAndroid: App ${formatSize(androidStats.appBytes)} • Dados ${formatSize(androidStats.dataBytes)} • Cache ${formatSize(androidStats.cacheBytes)} • Total ${formatSize(androidStats.totalBytes)}"
+                } else if (usageAllowed) {
+                    baseTypeText + "\nTamanho detectado: ${formatSize(draft.detectedSize)} • modo leve: total real será priorizado nos maiores apps"
+                } else {
+                    baseTypeText + "\nTamanho detectado: ${formatSize(draft.detectedSize)} • total real depende do Acesso ao uso"
+                }
+
+                val riskLevel = if (draft.sensitiveTag != null) "alto" else "normal"
+
+                FileItem(
+                    name = draft.appName,
+                    path = "app:${draft.packageName}",
+                    size = size,
+                    modified = draft.modified,
+                    type = sizeTypeText,
+                    category = "Aplicativos",
+                    risk = riskLevel
+                )
+            }.sortedWith(
+                compareBy<FileItem> {
+                    when {
+                        it.type.contains("Aplicativo • baixado") -> 0
+                        it.type.contains("sistema atualizado") -> 1
+                        else -> 2
+                    }
+                }.thenByDescending { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
+            )
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
-}
 
 private fun categoryFiles(title: String): List<FileItem> {
           fun lowerName(item: FileItem): String = item.name.lowercase(Locale.ROOT)
