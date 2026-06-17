@@ -11,6 +11,8 @@ import java.util.*
 
 class PremiumStatusNotificationService : Service() {
 
+    private var forceNextCacheRefreshN05iFix3: Boolean = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -20,6 +22,10 @@ class PremiumStatusNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val actionN05iFix3 = intent?.action
+        if (actionN05iFix3 == ACTION_REFRESH || actionN05iFix3 == ACTION_UPDATE) {
+            forceNextCacheRefreshN05iFix3 = true
+        }
         when (intent?.action) {
             ACTION_STOP_FROM_APP, ACTION_HIDE -> {
                 getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -83,6 +89,7 @@ class PremiumStatusNotificationService : Service() {
         val showUsed = prefs.getBoolean("show_used", true)
         val showRam = prefs.getBoolean("show_ram", true)
         val showTime = prefs.getBoolean("show_time", true)
+        val showCache = prefs.getBoolean("show_cache", true)
 
         val storage = storageInfo()
         val ram = ramInfo()
@@ -180,6 +187,22 @@ class PremiumStatusNotificationService : Service() {
             flags()
         )
 
+        val cacheSummaryN05iFix3 = NotificationCacheSummaryHelper.getSummary(this, forceNextCacheRefreshN05iFix3)
+        forceNextCacheRefreshN05iFix3 = false
+
+        val compactFinalN05iFix3 = if (showCache && cacheSummaryN05iFix3.show) {
+            val separator = if (compact.isBlank()) "" else " • "
+            compact + separator + cacheSummaryN05iFix3.compactLine
+        } else {
+            compact
+        }
+
+        val bigFinalN05iFix3 = if (showCache && cacheSummaryN05iFix3.show) {
+            big.trimEnd() + "\n" + cacheSummaryN05iFix3.detailedLine
+        } else {
+            big
+        }
+
         val builder: Notification.Builder =
             if (Build.VERSION.SDK_INT >= 26) {
                 Notification.Builder(this, CHANNEL_ID)
@@ -191,8 +214,8 @@ class PremiumStatusNotificationService : Service() {
         builder
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Monitor de armazenamento")
-            .setContentText(compact)
-            .setStyle(Notification.BigTextStyle().bigText(big))
+            .setContentText(compactFinalN05iFix3)
+            .setStyle(Notification.BigTextStyle().bigText(bigFinalN05iFix3))
             .setContentIntent(openPending)
             .setDeleteIntent(relockPending)
             .setOngoing(true)

@@ -4414,6 +4414,7 @@ private fun bottomNav(): LinearLayout {
             addCheck("Mostrar armazenamento usado", "show_used", true)
             addCheck("Mostrar RAM", "show_ram", true)
             addCheck("Mostrar hora da atualização", "show_time", true)
+            addCheck("Mostrar cache detectado", "show_cache", true)
 
             root.addView(optionsCard)
         } catch (_: Throwable) {
