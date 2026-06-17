@@ -122,6 +122,27 @@ super.onCreate(savedInstanceState)
                     scanFiles()
                 } catch (_: Throwable) {
                 }
+
+                /*
+                 * N05E2_FIX1_atualizar_lista_apps_apos_desinstalar
+                 *
+                 * A desinstalação em lote já funcionava, mas a lista podia ficar
+                 * com apps antigos presos na tela. Depois que a fila termina,
+                 * redesenhamos Aplicativos para consultar novamente o Android.
+                 *
+                 * NÃO mexer na fila que já funcionou.
+                 * NÃO tentar desinstalar silenciosamente.
+                 */
+                try {
+                    window.decorView.postDelayed({
+                        if (!BatchUninstallManager.hasRunningQueue(this) && currentCategory == "Aplicativos") {
+                            selectedFiles.clear()
+                            homeSummarySignature = ""
+                            showCategory("Aplicativos", cleanupCategoryDesc("Aplicativos"))
+                        }
+                    }, 450L)
+                } catch (_: Throwable) {
+                }
             }
 
             return
@@ -1411,6 +1432,32 @@ private fun showCategory(categoryTitle: String, categoryDesc: String) {
                   }
                   filter.addView(usageHint)
               }
+
+
+              /*
+               * N05F1_apps_tamanho_real_android
+               *
+               * Mostra orientação para liberar Acesso ao uso, necessário para tentar
+               * exibir App/Dados/Cache/Total como o Android mostra.
+               */
+              val androidStatsHint = TextView(this)
+              androidStatsHint.text = if (AppStorageStatsHelper.hasUsageAccess(this)) {
+                  "Tamanho real Android: Acesso ao uso liberado. Quando o Android permitir, os cards mostram App, Dados, Cache e Total. Toque para abrir a permissão."
+              } else {
+                  "Tamanho real Android: toque aqui e permita Acesso ao uso para tentar mostrar App, Dados, Cache e Total dentro do app."
+              }
+              androidStatsHint.textSize = 11f
+              androidStatsHint.setTextColor(Color.rgb(80, 90, 110))
+              androidStatsHint.setPadding(dp(10), dp(8), dp(10), dp(8))
+              androidStatsHint.background = rounded(
+                  if (AppStorageStatsHelper.hasUsageAccess(this)) Color.rgb(236, 255, 244) else Color.rgb(255, 248, 232),
+                  if (AppStorageStatsHelper.hasUsageAccess(this)) Color.rgb(140, 215, 165) else Color.rgb(238, 202, 126),
+                  dp(12)
+              )
+              androidStatsHint.setOnClickListener {
+                  AppStorageStatsHelper.openUsageAccessSettings(this)
+              }
+              filter.addView(androidStatsHint)
           }
 
 val yearTitle = TextView(this)
@@ -2071,7 +2118,11 @@ val yearTitle = TextView(this)
         box.addView(titleRow)
 
         val detail = TextView(this)
-        detail.text = "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
+        detail.text = if (isAppItem(item)) {
+            "${item.type} • ${formatDate(item.modified)}"
+        } else {
+            "${item.type} • ${formatSize(item.size)} • ${formatDate(item.modified)}"
+        }
         detail.textSize = 11f
         detail.setTextColor(Color.rgb(80, 90, 110))
         detail.setPadding(0, dp(6), 0, dp(4))
@@ -2528,6 +2579,34 @@ override fun onResume() {
         if (::root.isInitialized && hasStorageAccess()) {
             scanFiles()
         }
+
+        /*
+         * N05E2_FIX1_atualizar_lista_apps_apos_desinstalar
+         *
+         * Se voltamos da tela oficial do Android e a fila já acabou,
+         * força a categoria Aplicativos a ser redesenhada. Assim apps já
+         * removidos não ficam presos visualmente na lista.
+         */
+        if (::root.isInitialized && currentCategory == "Aplicativos") {
+            try {
+                val removedSelections = selectedFiles
+                    .filter { it.startsWith("app:") }
+                    .filter { !isAppPackageInstalled(it.removePrefix("app:")) }
+                    .toSet()
+
+                if (removedSelections.isNotEmpty()) {
+                    selectedFiles.removeAll(removedSelections)
+                }
+
+                window.decorView.postDelayed({
+                    if (!BatchUninstallManager.hasRunningQueue(this) && currentCategory == "Aplicativos") {
+                        homeSummarySignature = ""
+                        showCategory("Aplicativos", cleanupCategoryDesc("Aplicativos"))
+                    }
+                }, 600L)
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     private fun looksLikePdfContent(file: File): Boolean {
@@ -2603,6 +2682,15 @@ override fun onResume() {
 
         return file
     }
+
+private fun isAppPackageInstalled(packageName: String): Boolean {
+    return try {
+        packageManager.getPackageInfo(packageName, 0)
+        true
+    } catch (_: Throwable) {
+        false
+    }
+}
 
 private fun appPackage(item: FileItem): String {
     return item.path.removePrefix("app:")
@@ -3133,17 +3221,29 @@ private fun openFile(item: FileItem) {
             } catch (_: Exception) {
             }
 
-            val size = sourceFiles
+            val detectedSize = sourceFiles
                 .distinctBy { it.absolutePath }
                 .sumOf { f -> if (f.exists() && f.isFile) f.length() else 0L }
+
+            val androidStats = AppStorageStatsHelper.query(this, pkg.packageName)
+            val size = androidStats?.totalBytes ?: detectedSize
 
             val version = pkg.versionName ?: "versão não informada"
             val sensitiveTag = sensitiveAppTag(appName, pkg.packageName)
 
-            val typeText = if (sensitiveTag != null) {
+            val baseTypeText = if (sensitiveTag != null) {
                 "Aplicativo • $appKind • $sensitiveTag • versão $version • pacote ${pkg.packageName}"
             } else {
                 "Aplicativo • $appKind • versão $version • pacote ${pkg.packageName}"
+            }
+
+            val sizeTypeText = if (androidStats != null) {
+                baseTypeText +
+                    "
+Android: App ${formatSize(androidStats.appBytes)} • Dados ${formatSize(androidStats.dataBytes)} • Cache ${formatSize(androidStats.cacheBytes)} • Total ${formatSize(androidStats.totalBytes)}"
+            } else {
+                baseTypeText + "
+Tamanho detectado: ${formatSize(detectedSize)} • total real depende do Acesso ao uso"
             }
 
             val riskLevel = if (sensitiveTag != null) "alto" else "normal"
@@ -3153,7 +3253,7 @@ private fun openFile(item: FileItem) {
                 path = "app:${pkg.packageName}",
                 size = size,
                 modified = pkg.lastUpdateTime,
-                type = typeText,
+                type = sizeTypeText,
                 category = "Aplicativos",
                 risk = riskLevel
             )
