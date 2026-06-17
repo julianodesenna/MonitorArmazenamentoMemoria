@@ -3238,12 +3238,9 @@ private fun openFile(item: FileItem) {
             }
 
             val sizeTypeText = if (androidStats != null) {
-                baseTypeText +
-                    "
-Android: App ${formatSize(androidStats.appBytes)} • Dados ${formatSize(androidStats.dataBytes)} • Cache ${formatSize(androidStats.cacheBytes)} • Total ${formatSize(androidStats.totalBytes)}"
+                baseTypeText + "\nAndroid: App ${formatSize(androidStats.appBytes)} • Dados ${formatSize(androidStats.dataBytes)} • Cache ${formatSize(androidStats.cacheBytes)} • Total ${formatSize(androidStats.totalBytes)}"
             } else {
-                baseTypeText + "
-Tamanho detectado: ${formatSize(detectedSize)} • total real depende do Acesso ao uso"
+                baseTypeText + "\nTamanho detectado: ${formatSize(detectedSize)} • total real depende do Acesso ao uso"
             }
 
             val riskLevel = if (sensitiveTag != null) "alto" else "normal"
