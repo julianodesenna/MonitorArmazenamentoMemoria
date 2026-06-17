@@ -390,11 +390,12 @@ class PremiumStatusNotificationService : Service() {
             val cacheN05iFix4 = NotificationCacheSummaryHelper.getSummary(this, forceNextCacheRefreshN05iFix4)
             forceNextCacheRefreshN05iFix4 = false
             if (cacheN05iFix4.show) {
-                lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim())
+                lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim() + " • Atualizado às $time")
+                // N05I_FIX7_HORA_OBRIGATORIA_CACHE_TODOS_APPS
             }
         }
         // N05I_FIX5_CORRIGE_SHOWCACHE_VISIVEL_ANTES_ATUALIZADO
-        if (showTime) {
+        if (showTime && !showCacheN05iFix5) {
             lines.add("")
             lines.add("Atualizado às $time")
         }

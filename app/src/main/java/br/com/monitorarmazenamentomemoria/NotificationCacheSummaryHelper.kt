@@ -27,11 +27,8 @@ object NotificationCacheSummaryHelper {
     private const val KEY_CACHE_UPDATED_AT = "notification_cache_updated_at"
     private const val KEY_CACHE_APPS_COUNT = "notification_cache_apps_count"
 
-    private const val REFRESH_COOLDOWN_MS = 3L * 60L * 1000L
-    private const val SOFT_TTL_MS = 15L * 60L * 1000L
-    private const val MAX_APPS_TO_QUERY = 60
-
-    data class CacheNotificationSummary(
+    private const val REFRESH_COOLDOWN_MS = 5L * 60L * 1000Lnst val SOFT_TTL_MS = 15L * 60L * 1000L
+    private const val MAX_APPS_TO_QUERY = Int.MAX_VALUEnSummary(
         val show: Boolean,
         val compactLine: String,
         val detailedLine: String
