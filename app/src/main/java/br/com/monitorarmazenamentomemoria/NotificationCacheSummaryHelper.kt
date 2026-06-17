@@ -8,17 +8,19 @@ import java.util.Date
 import java.util.Locale
 
 /*
- * N05I_FIX1_cache_detectado_notificacao_atualizar
+ * N05I_FIX8_helper_cache_refeito
+ *
+ * Corrige erro de compilacao do N05I_FIX7.
  *
  * Objetivo:
- * - Mostrar cache detectado na notificacao fixa.
- * - Usar o botao Atualizar ja existente para tentar recalcular o cache.
- * - Salvar o ultimo valor para a notificacao nao ficar vazia.
+ * - Mostrar cache detectado na notificacao.
+ * - Permitir que o botao Atualizar tente recalcular o cache.
+ * - Tentar ler todos os aplicativos detectados.
+ * - Manter ultimo valor salvo se a leitura falhar.
  * - Nao criar botao Cache.
  * - Nao limpar cache automaticamente.
  * - Nao apagar dados.
  * - Nao usar root, ADB ou Shizuku.
- * - Manter calculo leve para nao travar o app.
  */
 object NotificationCacheSummaryHelper {
 
@@ -27,8 +29,16 @@ object NotificationCacheSummaryHelper {
     private const val KEY_CACHE_UPDATED_AT = "notification_cache_updated_at"
     private const val KEY_CACHE_APPS_COUNT = "notification_cache_apps_count"
 
-    private const val REFRESH_COOLDOWN_MS = 5L * 60L * 1000Lnst val SOFT_TTL_MS = 15L * 60L * 1000L
-    private const val MAX_APPS_TO_QUERY = Int.MAX_VALUEnSummary(
+    private const val REFRESH_COOLDOWN_MS: Long = 5L * 60L * 1000L
+    private const val SOFT_TTL_MS: Long = 20L * 60L * 1000L
+
+    /*
+     * Int.MAX_VALUE = tenta ler todos os apps detectados.
+     * Se ficar pesado, voltar para 60 ou 80.
+     */
+    private const val MAX_APPS_TO_QUERY: Int = Int.MAX_VALUE
+
+    data class CacheNotificationSummary(
         val show: Boolean,
         val compactLine: String,
         val detailedLine: String
