@@ -203,11 +203,7 @@ class PremiumStatusNotificationService : Service() {
             compact
         }
 
-        val bigFinalN05iFix3 = if (showCache && cacheSummaryN05iFix3.show) {
-            big.trimEnd() + "\n" + cacheSummaryN05iFix3.detailedLine
-        } else {
-            big
-        }
+        val bigFinalN05iFix3 = big
 
         val builder: Notification.Builder =
             if (Build.VERSION.SDK_INT >= 26) {
@@ -383,14 +379,15 @@ class PremiumStatusNotificationService : Service() {
             lines.add("RAM: $ramTexto LIVRE")
         }
 
-        lines.add("Fixo")
+        // N05I_FIX9B: texto "Fixo" removido do corpo; a trava real continua nas flags da notificação.
 
         val showCacheN05iFix5 = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("show_cache", true)
         if (showCacheN05iFix5) {
             val cacheN05iFix4 = NotificationCacheSummaryHelper.getSummary(this, forceNextCacheRefreshN05iFix4)
             forceNextCacheRefreshN05iFix4 = false
             if (cacheN05iFix4.show) {
-                lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim() + " • Atualizado às $time")
+                lines.add("Cache: " + cacheN05iFix4.compactLine.removePrefix("Cache ").trim() + " • $time")
+                // N05I_FIX9B_CACHE_COM_APPS_SEM_FIXO
                 // N05I_FIX7_HORA_OBRIGATORIA_CACHE_TODOS_APPS
             }
         }

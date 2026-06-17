@@ -58,7 +58,7 @@ object NotificationCacheSummaryHelper {
             if (lastBytes >= 0L && lastAt > 0L) {
                 return CacheNotificationSummary(
                     show = true,
-                    compactLine = "Cache ${formatSize(lastBytes)}",
+                    compactLine = if (lastCount > 0) "Cache ${formatSize(lastBytes)} • ${lastCount} apps" else "Cache ${formatSize(lastBytes)}",
                     detailedLine = "Cache detectado: ${formatSize(lastBytes)} • última leitura ${formatTime(lastAt)}"
                 )
             }
@@ -76,7 +76,7 @@ object NotificationCacheSummaryHelper {
         if (!forceRefresh && canUseRecentCache) {
             return CacheNotificationSummary(
                 show = true,
-                compactLine = "Cache ${formatSize(lastBytes)}",
+                compactLine = if (lastCount > 0) "Cache ${formatSize(lastBytes)} • ${lastCount} apps" else "Cache ${formatSize(lastBytes)}",
                 detailedLine = "Cache detectado: ${formatSize(lastBytes)} • ${lastCount} apps analisados • ${formatTime(lastAt)}"
             )
         }
@@ -84,7 +84,7 @@ object NotificationCacheSummaryHelper {
         if (forceRefresh && blockedByCooldown) {
             return CacheNotificationSummary(
                 show = true,
-                compactLine = "Cache ${formatSize(lastBytes)}",
+                compactLine = if (lastCount > 0) "Cache ${formatSize(lastBytes)} • ${lastCount} apps" else "Cache ${formatSize(lastBytes)}",
                 detailedLine = "Cache detectado: ${formatSize(lastBytes)} • atualizado há pouco"
             )
         }
@@ -100,7 +100,7 @@ object NotificationCacheSummaryHelper {
 
             return CacheNotificationSummary(
                 show = true,
-                compactLine = "Cache ${formatSize(refreshed.cacheBytes)}",
+                compactLine = "Cache ${formatSize(refreshed.cacheBytes)} • ${refreshed.appsCount} apps",
                 detailedLine = "Cache detectado: ${formatSize(refreshed.cacheBytes)} • ${refreshed.appsCount} apps analisados • atualizado agora"
             )
         }
@@ -108,7 +108,7 @@ object NotificationCacheSummaryHelper {
         if (lastBytes >= 0L && lastAt > 0L) {
             return CacheNotificationSummary(
                 show = true,
-                compactLine = "Cache ${formatSize(lastBytes)}",
+                compactLine = if (lastCount > 0) "Cache ${formatSize(lastBytes)} • ${lastCount} apps" else "Cache ${formatSize(lastBytes)}",
                 detailedLine = "Cache detectado: ${formatSize(lastBytes)} • última leitura ${formatTime(lastAt)}"
             )
         }
