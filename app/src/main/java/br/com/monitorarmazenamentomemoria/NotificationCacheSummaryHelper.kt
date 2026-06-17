@@ -27,9 +27,9 @@ object NotificationCacheSummaryHelper {
     private const val KEY_CACHE_UPDATED_AT = "notification_cache_updated_at"
     private const val KEY_CACHE_APPS_COUNT = "notification_cache_apps_count"
 
-    private const val REFRESH_COOLDOWN_MS = 2L * 60L * 1000L
-    private const val SOFT_TTL_MS = 10L * 60L * 1000L
-    private const val MAX_APPS_TO_QUERY = 15
+    private const val REFRESH_COOLDOWN_MS = 3L * 60L * 1000L
+    private const val SOFT_TTL_MS = 15L * 60L * 1000L
+    private const val MAX_APPS_TO_QUERY = 60
 
     data class CacheNotificationSummary(
         val show: Boolean,
@@ -70,7 +70,7 @@ object NotificationCacheSummaryHelper {
             return CacheNotificationSummary(
                 show = true,
                 compactLine = "Cache ${formatSize(lastBytes)}",
-                detailedLine = "Cache detectado: ${formatSize(lastBytes)} • ${lastCount} apps • ${formatTime(lastAt)}"
+                detailedLine = "Cache detectado: ${formatSize(lastBytes)} • ${lastCount} apps analisados • ${formatTime(lastAt)}"
             )
         }
 
@@ -94,7 +94,7 @@ object NotificationCacheSummaryHelper {
             return CacheNotificationSummary(
                 show = true,
                 compactLine = "Cache ${formatSize(refreshed.cacheBytes)}",
-                detailedLine = "Cache detectado: ${formatSize(refreshed.cacheBytes)} • ${refreshed.appsCount} apps • atualizado agora"
+                detailedLine = "Cache detectado: ${formatSize(refreshed.cacheBytes)} • ${refreshed.appsCount} apps analisados • atualizado agora"
             )
         }
 
