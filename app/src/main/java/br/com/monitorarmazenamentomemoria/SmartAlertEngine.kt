@@ -41,7 +41,10 @@ object SmartAlertEngine {
 
     private const val ID_STORAGE_LOW = 9041
     private const val ID_CACHE_HIGH = 9042
+    private const val ID_FAST_GROWTH = 9043
     private const val ID_TEST = 9099
+
+    private const val FAST_GROWTH_WINDOW_MS = 24L * 60L * 60L * 1000L
 
     private var testRingtone: Ringtone? = null
 
@@ -50,6 +53,7 @@ object SmartAlertEngine {
             createChannels(context)
             checkStorageLow(context, forceNotify = false)
             checkCacheHigh(context, forceNotify = false)
+            checkFastGrowth(context, forceNotify = false)
         } catch (_: Throwable) {
         }
     }
@@ -65,6 +69,7 @@ object SmartAlertEngine {
             createChannels(context)
             checkStorageLow(context, forceNotify = true)
             checkCacheHigh(context, forceNotify = true)
+            checkFastGrowth(context, forceNotify = true)
         } catch (_: Throwable) {
         }
     }
@@ -171,6 +176,89 @@ object SmartAlertEngine {
             } else {
                 "Cache indisponível para leitura"
             },
+            forceNotify = forceNotify
+        )
+    }
+
+    /*
+     * RITMO_08_crescimento_rapido
+     *
+     * Mantém uma referência de espaço livre por até 24 horas.
+     *
+     * Regra:
+     * - primeira leitura: apenas grava referência;
+     * - se ganhar espaço: atualiza referência para o maior valor livre;
+     * - se perder espaço acima do limite dentro de 24h: dispara alerta;
+     * - depois de 24h: reinicia a janela de comparação.
+     */
+    private fun checkFastGrowth(
+        context: Context,
+        forceNotify: Boolean
+    ) {
+        val setting = SmartAlertsManager.read(
+            context,
+            SmartAlertsManager.DETECTOR_FAST_GROWTH
+        )
+
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val currentFreeGb = storageFreeGb()
+
+        val baselineTimeKey = "fast_growth_baseline_time"
+        val baselineFreeKey = "fast_growth_baseline_free_bits"
+
+        val previousTime = prefs.getLong(baselineTimeKey, 0L)
+        val previousFreeGb = Double.fromBits(
+            prefs.getLong(baselineFreeKey, 0L)
+        )
+
+        // Primeira medição ou janela vencida.
+        if (previousTime <= 0L || now - previousTime > FAST_GROWTH_WINDOW_MS) {
+            prefs.edit()
+                .putLong(baselineTimeKey, now)
+                .putLong(baselineFreeKey, currentFreeGb.toBits())
+                .apply()
+
+            processDetector(
+                context = context,
+                detector = SmartAlertsManager.DETECTOR_FAST_GROWTH,
+                notificationId = ID_FAST_GROWTH,
+                isActive = false,
+                setting = setting,
+                title = "Crescimento rápido de uso",
+                text = "Aguardando histórico de armazenamento",
+                forceNotify = false
+            )
+            return
+        }
+
+        // Se o aparelho ganhou espaço, usa o maior valor como nova referência.
+        val baselineFreeGb =
+            if (currentFreeGb > previousFreeGb) {
+                prefs.edit()
+                    .putLong(baselineFreeKey, currentFreeGb.toBits())
+                    .apply()
+                currentFreeGb
+            } else {
+                previousFreeGb
+            }
+
+        val lostGb = (baselineFreeGb - currentFreeGb).coerceAtLeast(0.0)
+
+        val active =
+            setting.enabled &&
+            lostGb >= setting.limitGb
+
+        val elapsedMinutes = ((now - previousTime) / 60000L).coerceAtLeast(1L)
+
+        processDetector(
+            context = context,
+            detector = SmartAlertsManager.DETECTOR_FAST_GROWTH,
+            notificationId = ID_FAST_GROWTH,
+            isActive = active,
+            setting = setting,
+            title = "Crescimento rápido de uso",
+            text = "Perda: ${formatGb(lostGb)} GB em ${formatElapsed(elapsedMinutes)} • Limite: ${formatGb(setting.limitGb)} GB",
             forceNotify = forceNotify
         )
     }
@@ -484,6 +572,15 @@ object SmartAlertEngine {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
+        }
+    }
+
+    private fun formatElapsed(minutes: Long): String {
+        return when {
+            minutes < 60L -> "${minutes} min"
+            minutes < 120L -> "1 hora"
+            minutes < 1440L -> "${minutes / 60L} horas"
+            else -> "24 horas"
         }
     }
 
