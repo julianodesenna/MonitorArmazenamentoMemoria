@@ -11,6 +11,19 @@ import java.util.*
 
 class PremiumStatusNotificationService : Service() {
 
+    private val smartAlertHandler = Handler(Looper.getMainLooper())
+
+    private val smartAlertRunnable = object : Runnable {
+        override fun run() {
+            try {
+                SmartAlertEngine.checkAndNotify(this@PremiumStatusNotificationService)
+            } catch (_: Throwable) {
+            } finally {
+                smartAlertHandler.postDelayed(this, 15L * 60L * 1000L)
+            }
+        }
+    }
+
     private var forceNextCacheRefreshN05iFix4: Boolean = false
 
     private var forceNextCacheRefreshN05iFix3: Boolean = false
@@ -21,6 +34,7 @@ class PremiumStatusNotificationService : Service() {
         super.onCreate()
         createChannel()
         keepForeground()
+        smartAlertHandler.post(smartAlertRunnable)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -52,6 +66,11 @@ class PremiumStatusNotificationService : Service() {
         return START_STICKY
     }
 
+    override fun onDestroy() {
+        smartAlertHandler.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
 
@@ -65,6 +84,7 @@ class PremiumStatusNotificationService : Service() {
         try {
             createChannel()
             startForeground(NOTIFICATION_ID, buildNotification())
+            SmartAlertEngine.checkAndNotify(this)
         } catch (_: Throwable) {
             try {
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
