@@ -3862,6 +3862,7 @@ private fun categoryFiles(title: String): List<FileItem> {
         monitorCard.addView(monitorButton)
 
         root.addView(monitorCard)
+        cleanupCARDS03AddSmartAlertsCard(root)
         cleanupN03TAddNotificationOptionsCard(root)
         cleanupN03ZForcePremiumConfigVisual(root)
 
@@ -4294,6 +4295,233 @@ private fun bottomNav(): LinearLayout {
     }
 
 
+
+
+        /*
+         * CARDS_03_alertas_restaurados_sem_recarregar_tela
+         *
+         * Recria os cards de forma leve.
+         *
+         * Regra importante:
+         * - nao chama drawConfig() ao salvar;
+         * - nao reconstrói a tela inteira;
+         * - ainda nao liga alarmes reais.
+         */
+        private fun cleanupCARDS03AddSmartAlertsCard(root: android.widget.LinearLayout) {
+            try {
+                val card = card()
+                card.background = cleanupN03XRoundBg("#FFFFFF", "#E3E8F1", 22, 1)
+                card.setPadding(dp(18), dp(18), dp(18), dp(18))
+
+                card.addView(android.widget.TextView(this).apply {
+                    text = "Alertas Inteligentes"
+                    textSize = 22f
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setTextColor(cleanupN03XColor("#111827"))
+                    setPadding(0, 0, 0, dp(6))
+                })
+
+                card.addView(cleanupN03XDesc(
+                    "Cada alerta possui ajuste próprio. Os alarmes reais serão ligados em uma fase posterior."
+                ))
+
+                fun addCardButton(detector: String) {
+                    val button = android.widget.Button(this)
+                    button.text = SmartAlertsManager.summary(this, detector)
+                    button.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                    button.isAllCaps = false
+                    cleanupN03XStyleButton(button, selected = false, danger = false)
+
+                    button.setOnClickListener {
+                        cleanupCARDS03OpenDetectorDialog(detector, button)
+                    }
+
+                    card.addView(
+                        button,
+                        android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            setMargins(0, dp(4), 0, dp(4))
+                        }
+                    )
+                }
+
+                addCardButton(SmartAlertsManager.DETECTOR_STORAGE_LOW)
+                addCardButton(SmartAlertsManager.DETECTOR_CACHE_HIGH)
+                addCardButton(SmartAlertsManager.DETECTOR_LARGE_FILE)
+                addCardButton(SmartAlertsManager.DETECTOR_FAST_GROWTH)
+
+                val masterButton = android.widget.Button(this)
+                masterButton.isAllCaps = false
+                masterButton.text = if (SmartAlertsManager.anyEnabled(this)) {
+                    "Desativar todos os alertas"
+                } else {
+                    "Ativar todos os alertas"
+                }
+
+                cleanupN03XStyleButton(
+                    masterButton,
+                    selected = false,
+                    danger = SmartAlertsManager.anyEnabled(this)
+                )
+
+                masterButton.setOnClickListener {
+                    val shouldEnable = !SmartAlertsManager.anyEnabled(this)
+                    SmartAlertsManager.setAllEnabled(this, shouldEnable)
+
+                    masterButton.text = if (shouldEnable) {
+                        "Desativar todos os alertas"
+                    } else {
+                        "Ativar todos os alertas"
+                    }
+
+                    android.widget.Toast.makeText(
+                        this,
+                        if (shouldEnable) "Todos os alertas foram ativados"
+                        else "Todos os alertas foram desativados",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                card.addView(
+                    masterButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(10), 0, 0)
+                    }
+                )
+
+                root.addView(card)
+            } catch (_: Throwable) {
+            }
+        }
+
+        private fun cleanupCARDS03OpenDetectorDialog(
+            detector: String,
+            sourceButton: android.widget.Button
+        ) {
+            try {
+                val current = SmartAlertsManager.read(this, detector)
+
+                val container = android.widget.LinearLayout(this)
+                container.orientation = android.widget.LinearLayout.VERTICAL
+                container.setPadding(dp(22), dp(8), dp(22), dp(4))
+
+                val enabled = android.widget.CheckBox(this).apply {
+                    text = "Ativar este alerta"
+                    isChecked = current.enabled
+                }
+                container.addView(enabled)
+
+                val label = android.widget.TextView(this).apply {
+                    text = SmartAlertsManager.limitLabel(detector)
+                    textSize = 14f
+                    setPadding(0, dp(12), 0, dp(4))
+                }
+                container.addView(label)
+
+                val limitInput = android.widget.EditText(this).apply {
+                    inputType =
+                        android.text.InputType.TYPE_CLASS_NUMBER or
+                        android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    setText(SmartAlertsManager.formatLimit(current.limitGb))
+                    hint = SmartAlertsManager.defaultLimitHint(detector)
+                }
+                container.addView(limitInput)
+
+                val repeatTitle = android.widget.TextView(this).apply {
+                    text = "Repetir alerta"
+                    textSize = 14f
+                    setPadding(0, dp(12), 0, dp(4))
+                }
+                container.addView(repeatTitle)
+
+                val repeatSpinner = android.widget.Spinner(this)
+                val options = arrayOf("Nunca", "30 min", "1 hora", "3 horas", "6 horas")
+                repeatSpinner.adapter = android.widget.ArrayAdapter(
+                    this,
+                    android.R.layout.simple_spinner_dropdown_item,
+                    options
+                )
+                repeatSpinner.setSelection(
+                    SmartAlertsManager.repeatIndex(current.repeatMinutes)
+                )
+                container.addView(repeatSpinner)
+
+                val sound = android.widget.CheckBox(this).apply {
+                    text = "Tocar som quando este alerta disparar"
+                    isChecked = current.sound
+                    setPadding(0, dp(12), 0, 0)
+                }
+                container.addView(sound)
+
+                val vibration = android.widget.CheckBox(this).apply {
+                    text = "Vibrar quando este alerta disparar"
+                    isChecked = current.vibration
+                }
+                container.addView(vibration)
+
+                val popup = android.widget.CheckBox(this).apply {
+                    text = "Mostrar pop-up quando o app estiver aberto"
+                    isChecked = current.popup
+                }
+                container.addView(popup)
+
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(SmartAlertsManager.title(detector))
+                    .setView(container)
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Salvar") { _, _ ->
+                        val raw = limitInput.text?.toString()
+                            ?.trim()
+                            ?.replace(",", ".")
+                            ?: ""
+
+                        val parsed = raw.toDoubleOrNull()
+
+                        if (parsed == null || parsed <= 0.0) {
+                            android.widget.Toast.makeText(
+                                this,
+                                "Informe um limite maior que zero",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                            return@setPositiveButton
+                        }
+
+                        SmartAlertsManager.save(
+                            context = this,
+                            detector = detector,
+                            enabled = enabled.isChecked,
+                            limitGb = SmartAlertsManager.normalizeLimit(detector, parsed),
+                            sound = sound.isChecked,
+                            vibration = vibration.isChecked,
+                            popup = popup.isChecked,
+                            repeatMinutes = SmartAlertsManager.repeatMinutesFromIndex(
+                                repeatSpinner.selectedItemPosition
+                            )
+                        )
+
+                        // Atualiza somente o card tocado; nao recarrega toda a tela.
+                        sourceButton.text = SmartAlertsManager.summary(this, detector)
+
+                        android.widget.Toast.makeText(
+                            this,
+                            "Configuração salva",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    .show()
+            } catch (_: Throwable) {
+                android.widget.Toast.makeText(
+                    this,
+                    "Não foi possível abrir esse alerta",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
 
         private fun cleanupN03TPrefs(): android.content.SharedPreferences {
         return getSharedPreferences("monitor_premium", MODE_PRIVATE)
