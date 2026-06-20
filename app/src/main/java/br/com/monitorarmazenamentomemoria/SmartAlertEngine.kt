@@ -7,48 +7,76 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.VibrationEffect
+import android.os.Vibrator
 import java.util.Locale
 import kotlin.math.roundToInt
 
 /*
- * SINAL_04_alarme_real_storage_cache
+ * PULSO_05_alarme_forte
  *
- * Detectores ativos nesta fase:
+ * Alertas reais:
  * - armazenamento baixo
  * - cache alto
  *
- * Detectores futuros:
- * - arquivo grande novo
- * - crescimento rapido de uso
- *
- * Protecoes:
- * - usa repeticao individual;
- * - nao repete sem controle;
- * - cancela o estado ao normalizar;
- * - usa cache ja calculado, sem forcar nova varredura pesada.
+ * Melhorias:
+ * - canal novo V2 para evitar configuracao silenciosa antiga;
+ * - teste direto de som e vibracao;
+ * - repeticao corrigida;
+ * - ao normalizar, libera novo disparo.
  */
 object SmartAlertEngine {
 
-    private const val PREFS = "smart_alert_engine"
-    private const val CHANNEL_SOUND_VIBRATE = "smart_alert_sound_vibrate"
-    private const val CHANNEL_SOUND = "smart_alert_sound"
-    private const val CHANNEL_VIBRATE = "smart_alert_vibrate"
-    private const val CHANNEL_SILENT = "smart_alert_silent"
+    private const val PREFS = "smart_alert_engine_pulso_05"
 
-    private const val ID_STORAGE_LOW = 8041
-    private const val ID_CACHE_HIGH = 8042
+    private const val CHANNEL_SOUND_VIBRATE = "smart_alarm_pulso_v2_sound_vibrate"
+    private const val CHANNEL_SOUND = "smart_alarm_pulso_v2_sound"
+    private const val CHANNEL_VIBRATE = "smart_alarm_pulso_v2_vibrate"
+    private const val CHANNEL_SILENT = "smart_alarm_pulso_v2_silent"
+
+    private const val ID_STORAGE_LOW = 9041
+    private const val ID_CACHE_HIGH = 9042
+    private const val ID_TEST = 9099
+
+    private var testRingtone: Ringtone? = null
 
     fun checkAndNotify(context: Context) {
         try {
             createChannels(context)
-
             checkStorageLow(context)
             checkCacheHigh(context)
         } catch (_: Throwable) {
+        }
+    }
+
+    fun testAlarm(context: Context) {
+        try {
+            createChannels(context)
+            playDirectSoundAndVibration(context)
+
+            showNotification(
+                context = context,
+                notificationId = ID_TEST,
+                title = "⚠ TESTE DE ALARME",
+                text = "Som, vibração e alerta visual em teste.",
+                sound = true,
+                vibration = true
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun stopTestAlarm() {
+        try {
+            testRingtone?.stop()
+        } catch (_: Throwable) {
+        } finally {
+            testRingtone = null
         }
     }
 
@@ -95,7 +123,7 @@ object SmartAlertEngine {
             text = if (cacheGb != null) {
                 "Cache: ${formatGb(cacheGb)} GB • Limite: ${formatGb(setting.limitGb)} GB"
             } else {
-                "Cache ainda não disponível para leitura"
+                "Cache indisponível para leitura"
             }
         )
     }
@@ -112,11 +140,12 @@ object SmartAlertEngine {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         val activeKey = "${detector}_active"
-        val lastKey = "${detector}_last_alert"
+        val lastKey = "${detector}_last"
 
         if (!isActive) {
             prefs.edit()
                 .putBoolean(activeKey, false)
+                .remove(lastKey)
                 .apply()
 
             notificationManager(context).cancel(notificationId)
@@ -125,13 +154,14 @@ object SmartAlertEngine {
 
         val now = System.currentTimeMillis()
         val wasActive = prefs.getBoolean(activeKey, false)
-        val lastAlert = prefs.getLong(lastKey, 0L)
+        val last = prefs.getLong(lastKey, 0L)
         val repeatMs = setting.repeatMinutes.toLong() * 60L * 1000L
 
-        val canAlert = when {
+        val mustNotify = when {
             !wasActive -> true
             setting.repeatMinutes <= 0 -> false
-            now - lastAlert >= repeatMs -> true
+            last <= 0L -> true
+            now - last >= repeatMs -> true
             else -> false
         }
 
@@ -139,14 +169,15 @@ object SmartAlertEngine {
             .putBoolean(activeKey, true)
             .apply()
 
-        if (!canAlert) return
+        if (!mustNotify) return
 
-        showAlertNotification(
+        showNotification(
             context = context,
             notificationId = notificationId,
-            title = title,
+            title = "⚠ $title",
             text = text,
-            setting = setting
+            sound = setting.sound,
+            vibration = setting.vibration
         )
 
         prefs.edit()
@@ -154,17 +185,18 @@ object SmartAlertEngine {
             .apply()
     }
 
-    private fun showAlertNotification(
+    private fun showNotification(
         context: Context,
         notificationId: Int,
         title: String,
         text: String,
-        setting: SmartAlertsManager.DetectorSettings
+        sound: Boolean,
+        vibration: Boolean
     ) {
         val openIntent = Intent(context, CleanupSimpleActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             putExtra("open_tab", "limpeza")
-            putExtra("source", "smart_alert")
+            putExtra("source", "smart_alarm")
         }
 
         val openPending = PendingIntent.getActivity(
@@ -176,7 +208,7 @@ object SmartAlertEngine {
 
         val builder =
             if (Build.VERSION.SDK_INT >= 26) {
-                Notification.Builder(context, channelIdFor(setting))
+                Notification.Builder(context, channelIdFor(sound, vibration))
             } else {
                 @Suppress("DEPRECATION")
                 Notification.Builder(context)
@@ -184,78 +216,147 @@ object SmartAlertEngine {
 
         builder
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("⚠ $title")
+            .setContentTitle(title)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(openPending)
             .setAutoCancel(true)
             .setOnlyAlertOnce(false)
-            .setPriority(Notification.PRIORITY_HIGH)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
 
         if (Build.VERSION.SDK_INT < 26) {
             @Suppress("DEPRECATION")
             when {
-                setting.sound && setting.vibration -> {
+                sound && vibration ->
                     builder.setDefaults(Notification.DEFAULT_SOUND or Notification.DEFAULT_VIBRATE)
-                }
-                setting.sound -> builder.setDefaults(Notification.DEFAULT_SOUND)
-                setting.vibration -> builder.setDefaults(Notification.DEFAULT_VIBRATE)
+                sound ->
+                    builder.setDefaults(Notification.DEFAULT_SOUND)
+                vibration ->
+                    builder.setDefaults(Notification.DEFAULT_VIBRATE)
             }
         }
 
         notificationManager(context).notify(notificationId, builder.build())
     }
 
+    private fun playDirectSoundAndVibration(context: Context) {
+        try {
+            stopTestAlarm()
+
+            val uri = RingtoneManager.getDefaultUri(
+                RingtoneManager.TYPE_ALARM
+            ) ?: RingtoneManager.getDefaultUri(
+                RingtoneManager.TYPE_NOTIFICATION
+            )
+
+            if (uri != null) {
+                testRingtone = RingtoneManager.getRingtone(context, uri)
+                testRingtone?.play()
+            }
+        } catch (_: Throwable) {
+        }
+
+        try {
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+
+            if (vibrator != null) {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    vibrator.vibrate(
+                        VibrationEffect.createWaveform(
+                            longArrayOf(0L, 250L, 120L, 250L, 120L, 450L),
+                            -1
+                        )
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(
+                        longArrayOf(0L, 250L, 120L, 250L, 120L, 450L),
+                        -1
+                    )
+                }
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
 
         val manager = notificationManager(context)
-        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val alarmUri = RingtoneManager.getDefaultUri(
+            RingtoneManager.TYPE_ALARM
+        ) ?: RingtoneManager.getDefaultUri(
+            RingtoneManager.TYPE_NOTIFICATION
+        )
 
-        fun channel(
+        fun makeChannel(
             id: String,
             name: String,
-            sound: Boolean,
-            vibration: Boolean
+            soundEnabled: Boolean,
+            vibrationEnabled: Boolean
         ) {
-            val c = NotificationChannel(
+            val channel = NotificationChannel(
                 id,
                 name,
                 NotificationManager.IMPORTANCE_HIGH
             )
 
-            c.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            c.enableVibration(vibration)
+            channel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            channel.enableVibration(vibrationEnabled)
 
-            if (vibration) {
-                c.vibrationPattern = longArrayOf(0L, 220L, 160L, 220L)
+            if (vibrationEnabled) {
+                channel.vibrationPattern =
+                    longArrayOf(0L, 250L, 120L, 250L, 120L, 450L)
             }
 
-            if (sound) {
-                val attrs = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            if (soundEnabled && alarmUri != null) {
+                val attributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
 
-                c.setSound(soundUri, attrs)
+                channel.setSound(alarmUri, attributes)
             } else {
-                c.setSound(null, null)
+                channel.setSound(null, null)
             }
 
-            manager.createNotificationChannel(c)
+            manager.createNotificationChannel(channel)
         }
 
-        channel(CHANNEL_SOUND_VIBRATE, "Alertas: som e vibração", true, true)
-        channel(CHANNEL_SOUND, "Alertas: som", true, false)
-        channel(CHANNEL_VIBRATE, "Alertas: vibração", false, true)
-        channel(CHANNEL_SILENT, "Alertas: silencioso", false, false)
+        makeChannel(
+            CHANNEL_SOUND_VIBRATE,
+            "Monitor: alarme com som e vibração",
+            true,
+            true
+        )
+
+        makeChannel(
+            CHANNEL_SOUND,
+            "Monitor: alarme com som",
+            true,
+            false
+        )
+
+        makeChannel(
+            CHANNEL_VIBRATE,
+            "Monitor: alarme com vibração",
+            false,
+            true
+        )
+
+        makeChannel(
+            CHANNEL_SILENT,
+            "Monitor: alarme silencioso",
+            false,
+            false
+        )
     }
 
-    private fun channelIdFor(setting: SmartAlertsManager.DetectorSettings): String {
+    private fun channelIdFor(sound: Boolean, vibration: Boolean): String {
         return when {
-            setting.sound && setting.vibration -> CHANNEL_SOUND_VIBRATE
-            setting.sound -> CHANNEL_SOUND
-            setting.vibration -> CHANNEL_VIBRATE
+            sound && vibration -> CHANNEL_SOUND_VIBRATE
+            sound -> CHANNEL_SOUND
+            vibration -> CHANNEL_VIBRATE
             else -> CHANNEL_SILENT
         }
     }
@@ -263,8 +364,8 @@ object SmartAlertEngine {
     private fun storageFreeGb(): Double {
         return try {
             val stat = StatFs(Environment.getDataDirectory().absolutePath)
-            val bytes = stat.availableBytes.coerceAtLeast(0L)
-            bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            stat.availableBytes.coerceAtLeast(0L).toDouble() /
+                (1024.0 * 1024.0 * 1024.0)
         } catch (_: Throwable) {
             0.0
         }
@@ -281,10 +382,11 @@ object SmartAlertEngine {
                 RegexOption.IGNORE_CASE
             ).find(summary.compactLine) ?: return null
 
-            val number = match.groupValues[1].replace(",", ".").toDoubleOrNull() ?: return null
-            val unit = match.groupValues[2].uppercase(Locale.ROOT)
+            val number = match.groupValues[1]
+                .replace(",", ".")
+                .toDoubleOrNull() ?: return null
 
-            when (unit) {
+            when (match.groupValues[2].uppercase(Locale.ROOT)) {
                 "GB" -> number
                 "MB" -> number / 1024.0
                 "KB" -> number / (1024.0 * 1024.0)
@@ -296,7 +398,8 @@ object SmartAlertEngine {
     }
 
     private fun notificationManager(context: Context): NotificationManager {
-        return context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return context.getSystemService(Context.NOTIFICATION_SERVICE)
+            as NotificationManager
     }
 
     private fun pendingFlags(): Int {

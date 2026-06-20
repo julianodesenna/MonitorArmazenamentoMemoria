@@ -4394,8 +4394,119 @@ private fun bottomNav(): LinearLayout {
                     }
                 )
 
+                val testButton = android.widget.Button(this)
+                testButton.text = "TESTAR ALARME AGORA"
+                testButton.isAllCaps = false
+                cleanupN03XStyleButton(testButton, selected = true, danger = true)
+
+                testButton.setOnClickListener {
+                    cleanupPULSO05TestAlarm()
+                }
+
+                card.addView(
+                    testButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(8), 0, 0)
+                    }
+                )
+
                 root.addView(card)
             } catch (_: Throwable) {
+            }
+        }
+
+
+        /*
+         * PULSO_05_alarme_forte
+         *
+         * Teste visual e sonoro imediato.
+         * Funciona enquanto o app estiver aberto.
+         */
+        private fun cleanupPULSO05TestAlarm() {
+            try {
+                SmartAlertEngine.testAlarm(this)
+
+                val box = android.widget.LinearLayout(this)
+                box.orientation = android.widget.LinearLayout.VERTICAL
+                box.gravity = android.view.Gravity.CENTER
+                box.setPadding(dp(28), dp(34), dp(28), dp(28))
+
+                val title = android.widget.TextView(this).apply {
+                    text = "⚠ TESTE DE ALARME"
+                    textSize = 24f
+                    gravity = android.view.Gravity.CENTER
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setTextColor(android.graphics.Color.WHITE)
+                }
+
+                val message = android.widget.TextView(this).apply {
+                    text = "Som, vibração e alerta visual ativos."
+                    textSize = 17f
+                    gravity = android.view.Gravity.CENTER
+                    setTextColor(android.graphics.Color.WHITE)
+                    setPadding(0, dp(16), 0, dp(6))
+                }
+
+                box.addView(title)
+                box.addView(message)
+
+                val dialog = android.app.AlertDialog.Builder(this)
+                    .setView(box)
+                    .setCancelable(true)
+                    .setPositiveButton("SILENCIAR") { _, _ ->
+                        SmartAlertEngine.stopTestAlarm()
+                    }
+                    .setNegativeButton("FECHAR") { _, _ ->
+                        SmartAlertEngine.stopTestAlarm()
+                    }
+                    .create()
+
+                dialog.setOnDismissListener {
+                    SmartAlertEngine.stopTestAlarm()
+                }
+
+                dialog.show()
+
+                val window = dialog.window
+                window?.setBackgroundDrawable(
+                    android.graphics.drawable.ColorDrawable(
+                        android.graphics.Color.rgb(180, 20, 35)
+                    )
+                )
+
+                val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                var red = true
+
+                val pulse = object : Runnable {
+                    override fun run() {
+                        if (!dialog.isShowing) return
+
+                        val color = if (red) {
+                            android.graphics.Color.rgb(185, 20, 35)
+                        } else {
+                            android.graphics.Color.rgb(245, 135, 20)
+                        }
+
+                        window?.setBackgroundDrawable(
+                            android.graphics.drawable.ColorDrawable(color)
+                        )
+
+                        red = !red
+                        handler.postDelayed(this, 420L)
+                    }
+                }
+
+                handler.post(pulse)
+
+            } catch (_: Throwable) {
+                android.widget.Toast.makeText(
+                    this,
+                    "Não foi possível iniciar o teste de alarme",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
