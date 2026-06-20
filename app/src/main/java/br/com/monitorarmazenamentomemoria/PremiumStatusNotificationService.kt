@@ -58,7 +58,16 @@ class PremiumStatusNotificationService : Service() {
                 return START_NOT_STICKY
             }
 
-            ACTION_REFRESH, ACTION_UPDATE, ACTION_RELOCK -> keepForeground()
+            ACTION_REFRESH, ACTION_UPDATE -> {
+                keepForeground()
+
+                try {
+                    SmartAlertEngine.checkAndNotifyNow(this)
+                } catch (_: Throwable) {
+                }
+            }
+
+            ACTION_RELOCK -> keepForeground()
 
             else -> keepForeground()
         }

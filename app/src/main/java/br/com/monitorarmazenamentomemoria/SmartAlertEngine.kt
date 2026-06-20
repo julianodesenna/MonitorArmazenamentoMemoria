@@ -48,8 +48,23 @@ object SmartAlertEngine {
     fun checkAndNotify(context: Context) {
         try {
             createChannels(context)
-            checkStorageLow(context)
-            checkCacheHigh(context)
+            checkStorageLow(context, forceNotify = false)
+            checkCacheHigh(context, forceNotify = false)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /*
+     * Chamado pelo botao Atualizar da notificacao principal.
+     *
+     * Reavalia os detectores imediatamente e ignora apenas
+     * a trava de repeticao daquela verificacao manual.
+     */
+    fun checkAndNotifyNow(context: Context) {
+        try {
+            createChannels(context)
+            checkStorageLow(context, forceNotify = true)
+            checkCacheHigh(context, forceNotify = true)
         } catch (_: Throwable) {
         }
     }
@@ -104,7 +119,10 @@ object SmartAlertEngine {
         }
     }
 
-    private fun checkStorageLow(context: Context) {
+    private fun checkStorageLow(
+        context: Context,
+        forceNotify: Boolean
+    ) {
         val setting = SmartAlertsManager.read(
             context,
             SmartAlertsManager.DETECTOR_STORAGE_LOW
@@ -121,11 +139,15 @@ object SmartAlertEngine {
             isActive = active,
             setting = setting,
             title = "Armazenamento baixo",
-            text = "Livre: ${formatGb(freeGb)} GB • Limite: ${formatGb(setting.limitGb)} GB"
+            text = "Livre: ${formatGb(freeGb)} GB • Limite: ${formatGb(setting.limitGb)} GB",
+            forceNotify = forceNotify
         )
     }
 
-    private fun checkCacheHigh(context: Context) {
+    private fun checkCacheHigh(
+        context: Context,
+        forceNotify: Boolean
+    ) {
         val setting = SmartAlertsManager.read(
             context,
             SmartAlertsManager.DETECTOR_CACHE_HIGH
@@ -148,7 +170,8 @@ object SmartAlertEngine {
                 "Cache: ${formatGb(cacheGb)} GB • Limite: ${formatGb(setting.limitGb)} GB"
             } else {
                 "Cache indisponível para leitura"
-            }
+            },
+            forceNotify = forceNotify
         )
     }
 
@@ -159,7 +182,8 @@ object SmartAlertEngine {
         isActive: Boolean,
         setting: SmartAlertsManager.DetectorSettings,
         title: String,
-        text: String
+        text: String,
+        forceNotify: Boolean
     ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -182,6 +206,7 @@ object SmartAlertEngine {
         val repeatMs = setting.repeatMinutes.toLong() * 60L * 1000L
 
         val mustNotify = when {
+            forceNotify -> true
             !wasActive -> true
             setting.repeatMinutes <= 0 -> false
             last <= 0L -> true
