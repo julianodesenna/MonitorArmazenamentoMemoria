@@ -4413,6 +4413,59 @@ private fun bottomNav(): LinearLayout {
                     }
                 )
 
+
+                val overlayPermissionButton = android.widget.Button(this)
+                overlayPermissionButton.isAllCaps = false
+                overlayPermissionButton.text =
+                    if (SmartAlertOverlay.canShow(this)) {
+                        "ALERTAS SOBRE OUTROS APPS: PERMITIDO"
+                    } else {
+                        "PERMITIR ALERTAS SOBRE OUTROS APPS"
+                    }
+
+                cleanupN03XStyleButton(
+                    overlayPermissionButton,
+                    selected = SmartAlertOverlay.canShow(this),
+                    danger = !SmartAlertOverlay.canShow(this)
+                )
+
+                overlayPermissionButton.setOnClickListener {
+                    cleanupSOBREPOR06RequestOverlayPermission()
+                }
+
+                card.addView(
+                    overlayPermissionButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(8), 0, 0)
+                    }
+                )
+
+                val testOverlayButton = android.widget.Button(this)
+                testOverlayButton.text = "TESTAR ALERTA SOBRE OUTROS APPS"
+                testOverlayButton.isAllCaps = false
+                cleanupN03XStyleButton(testOverlayButton, selected = false, danger = true)
+
+                testOverlayButton.setOnClickListener {
+                    if (!SmartAlertOverlay.canShow(this)) {
+                        cleanupSOBREPOR06RequestOverlayPermission()
+                    } else {
+                        SmartAlertEngine.testOverlayAlarm(this)
+                    }
+                }
+
+                card.addView(
+                    testOverlayButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(8), 0, 0)
+                    }
+                )
+
                 root.addView(card)
             } catch (_: Throwable) {
             }
@@ -4425,6 +4478,39 @@ private fun bottomNav(): LinearLayout {
          * Teste visual e sonoro imediato.
          * Funciona enquanto o app estiver aberto.
          */
+
+        private fun cleanupSOBREPOR06RequestOverlayPermission() {
+            try {
+                if (SmartAlertOverlay.canShow(this)) {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Permissão para alertas sobre outros apps já está ativa",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    return
+                }
+
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:$packageName")
+                )
+
+                startActivity(intent)
+
+                android.widget.Toast.makeText(
+                    this,
+                    "Ative “Permitir exibição sobre outros apps” e volte ao Monitor",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } catch (_: Throwable) {
+                android.widget.Toast.makeText(
+                    this,
+                    "Não foi possível abrir a tela de permissão",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
         private fun cleanupPULSO05TestAlarm() {
             try {
                 SmartAlertEngine.testAlarm(this)

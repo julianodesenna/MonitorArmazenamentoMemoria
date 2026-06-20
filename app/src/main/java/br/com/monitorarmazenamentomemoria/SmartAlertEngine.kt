@@ -57,7 +57,7 @@ object SmartAlertEngine {
     fun testAlarm(context: Context) {
         try {
             createChannels(context)
-            playDirectSoundAndVibration(context)
+            playDirectSoundAndVibration(context, true, true)
 
             showNotification(
                 context = context,
@@ -66,6 +66,30 @@ object SmartAlertEngine {
                 text = "Som, vibração e alerta visual em teste.",
                 sound = true,
                 vibration = true
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+
+    fun testOverlayAlarm(context: Context) {
+        try {
+            createChannels(context)
+            playDirectSoundAndVibration(context, true, true)
+
+            SmartAlertOverlay.showIfAllowed(
+                context = context,
+                title = "⚠ TESTE DE ALERTA",
+                message = "Alerta visual funcionando sobre outros aplicativos."
+            )
+
+            showNotification(
+                context = context,
+                notificationId = ID_TEST + 1,
+                title = "⚠ TESTE DE ALERTA",
+                text = "Som, vibração e alerta flutuante em teste.",
+                sound = false,
+                vibration = false
             )
         } catch (_: Throwable) {
         }
@@ -171,13 +195,25 @@ object SmartAlertEngine {
 
         if (!mustNotify) return
 
+        playDirectSoundAndVibration(
+            context = context,
+            soundEnabled = setting.sound,
+            vibrationEnabled = setting.vibration
+        )
+
+        SmartAlertOverlay.showIfAllowed(
+            context = context,
+            title = "⚠ $title",
+            message = text
+        )
+
         showNotification(
             context = context,
             notificationId = notificationId,
             title = "⚠ $title",
             text = text,
-            sound = setting.sound,
-            vibration = setting.vibration
+            sound = false,
+            vibration = false
         )
 
         prefs.edit()
@@ -239,27 +275,42 @@ object SmartAlertEngine {
         notificationManager(context).notify(notificationId, builder.build())
     }
 
-    private fun playDirectSoundAndVibration(context: Context) {
-        try {
-            stopTestAlarm()
+    private fun playDirectSoundAndVibration(
+        context: Context,
+        soundEnabled: Boolean,
+        vibrationEnabled: Boolean
+    ) {
+        if (soundEnabled) {
+            try {
+                stopTestAlarm()
 
-            val uri = RingtoneManager.getDefaultUri(
-                RingtoneManager.TYPE_ALARM
-            ) ?: RingtoneManager.getDefaultUri(
-                RingtoneManager.TYPE_NOTIFICATION
-            )
+                val uri = RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_ALARM
+                ) ?: RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_NOTIFICATION
+                )
 
-            if (uri != null) {
-                testRingtone = RingtoneManager.getRingtone(context, uri)
-                testRingtone?.play()
+                if (uri != null) {
+                    testRingtone = RingtoneManager.getRingtone(context, uri)
+                    testRingtone?.play()
+
+                    android.os.Handler(android.os.Looper.getMainLooper())
+                        .postDelayed({
+                            try {
+                                testRingtone?.stop()
+                            } catch (_: Throwable) {
+                            }
+                        }, 7000L)
+                }
+            } catch (_: Throwable) {
             }
-        } catch (_: Throwable) {
         }
 
-        try {
-            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        if (vibrationEnabled) {
+            try {
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
-            if (vibrator != null) {
+                if (vibrator != null) {
                 if (Build.VERSION.SDK_INT >= 26) {
                     vibrator.vibrate(
                         VibrationEffect.createWaveform(
@@ -274,8 +325,9 @@ object SmartAlertEngine {
                         -1
                     )
                 }
+                }
+            } catch (_: Throwable) {
             }
-        } catch (_: Throwable) {
         }
     }
 
