@@ -56,7 +56,7 @@ object SmartAlertEngine {
             checkStorageLow(context, forceNotify = false)
             checkCacheHigh(context, forceNotify = false)
             checkFastGrowth(context, forceNotify = false)
-            checkLargeFile(context, forceNotify = false)
+            // ARQUIVO_10 pausado temporariamente: varredura sera movida para tarefa leve em segundo plano.
         } catch (_: Throwable) {
         }
     }
@@ -74,7 +74,7 @@ object SmartAlertEngine {
             checkStorageLow(context, forceNotify = true)
             checkCacheHigh(context, forceNotify = true)
             checkFastGrowth(context, forceNotify = true)
-            checkLargeFile(context, forceNotify = true)
+            // ARQUIVO_10 pausado temporariamente: Atualizar nao fara varredura pesada.
         } catch (_: Throwable) {
         }
     }
