@@ -42,6 +42,7 @@ object SmartAlertEngine {
     private const val ID_STORAGE_LOW = 9041
     private const val ID_CACHE_HIGH = 9042
     private const val ID_FAST_GROWTH = 9043
+    private const val ID_LARGE_FILE = 9044
     private const val ID_TEST = 9099
 
     private const val FAST_GROWTH_WINDOW_MS = 24L * 60L * 60L * 1000L
@@ -50,10 +51,12 @@ object SmartAlertEngine {
 
     fun checkAndNotify(context: Context) {
         try {
+            markCheck(context, manual = false)
             createChannels(context)
             checkStorageLow(context, forceNotify = false)
             checkCacheHigh(context, forceNotify = false)
             checkFastGrowth(context, forceNotify = false)
+            checkLargeFile(context, forceNotify = false)
         } catch (_: Throwable) {
         }
     }
@@ -66,10 +69,12 @@ object SmartAlertEngine {
      */
     fun checkAndNotifyNow(context: Context) {
         try {
+            markCheck(context, manual = true)
             createChannels(context)
             checkStorageLow(context, forceNotify = true)
             checkCacheHigh(context, forceNotify = true)
             checkFastGrowth(context, forceNotify = true)
+            checkLargeFile(context, forceNotify = true)
         } catch (_: Throwable) {
         }
     }
@@ -260,6 +265,108 @@ object SmartAlertEngine {
             title = "Crescimento rápido de uso",
             text = "Perda: ${formatGb(lostGb)} GB em ${formatElapsed(elapsedMinutes)} • Limite: ${formatGb(setting.limitGb)} GB",
             forceNotify = forceNotify
+        )
+    }
+
+
+    /*
+     * RITMO_09
+     *
+     * Guarda a hora real da última tentativa de verificação.
+     * A rotina automática tenta rodar a cada 15 minutos, mas o Android
+     * pode atrasar essa tentativa em economia de bateria ou repouso.
+     */
+    private fun markCheck(context: Context, manual: Boolean) {
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_check_time", System.currentTimeMillis())
+                .putBoolean("last_check_manual", manual)
+                .apply()
+        } catch (_: Throwable) {
+        }
+    }
+
+    fun monitorStatus(context: Context): String {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val last = prefs.getLong("last_check_time", 0L)
+            val manual = prefs.getBoolean("last_check_manual", false)
+
+            if (last <= 0L) {
+                "Ainda não houve verificação registrada."
+            } else {
+                val hora = java.text.SimpleDateFormat(
+                    "HH:mm",
+                    Locale("pt", "BR")
+                ).format(java.util.Date(last))
+
+                val tipo = if (manual) "manual" else "automática"
+
+                "Última verificação: $hora ($tipo). Tentativa automática: a cada 15 min."
+            }
+        } catch (_: Throwable) {
+            "Tentativa automática: a cada 15 min."
+        }
+    }
+
+    /*
+     * ARQUIVO_10
+     *
+     * Faz varredura controlada apenas em áreas públicas acessíveis.
+     *
+     * Primeira leitura:
+     * - registra os arquivos atuais como conhecidos;
+     * - não alerta arquivos antigos.
+     *
+     * Próximas leituras:
+     * - detecta arquivos novos acima do limite configurado;
+     * - alerta apenas o maior arquivo novo encontrado.
+     */
+    private fun checkLargeFile(
+        context: Context,
+        forceNotify: Boolean
+    ) {
+        val setting = SmartAlertsManager.read(
+            context,
+            SmartAlertsManager.DETECTOR_LARGE_FILE
+        )
+
+        if (!setting.enabled) {
+            processDetector(
+                context = context,
+                detector = SmartAlertsManager.DETECTOR_LARGE_FILE,
+                notificationId = ID_LARGE_FILE,
+                isActive = false,
+                setting = setting,
+                title = "Arquivo grande novo",
+                text = "Detector desligado",
+                forceNotify = false
+            )
+            return
+        }
+
+        val result = LargeFileAlertScanner.scan(
+            context = context,
+            minimumGb = setting.limitGb,
+            forceScan = forceNotify
+        )
+
+        val found = result.newLargeFile
+
+        processDetector(
+            context = context,
+            detector = SmartAlertsManager.DETECTOR_LARGE_FILE,
+            notificationId = ID_LARGE_FILE,
+            isActive = found != null,
+            setting = setting,
+            title = "Arquivo grande novo",
+            text = if (found != null) {
+                "${found.name} • ${formatGb(found.sizeGb)} GB • ${found.location}"
+            } else {
+                result.message
+            },
+            forceNotify = forceNotify && found != null
         )
     }
 

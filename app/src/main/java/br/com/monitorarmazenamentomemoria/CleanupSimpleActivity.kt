@@ -4322,8 +4322,15 @@ private fun bottomNav(): LinearLayout {
                 })
 
                 card.addView(cleanupN03XDesc(
-                    "Cada alerta possui ajuste próprio. Os alarmes reais serão ligados em uma fase posterior."
+                    "Cada alerta possui ajuste próprio. O Monitor tenta verificar automaticamente a cada 15 minutos."
                 ))
+
+                card.addView(android.widget.TextView(this).apply {
+                    text = SmartAlertEngine.monitorStatus(this@CleanupSimpleActivity)
+                    textSize = 13f
+                    setTextColor(cleanupN03XColor("#667085"))
+                    setPadding(0, 0, 0, dp(8))
+                })
 
                 fun addCardButton(detector: String) {
                     val button = android.widget.Button(this)
