@@ -3862,6 +3862,7 @@ private fun categoryFiles(title: String): List<FileItem> {
         monitorCard.addView(monitorButton)
 
         root.addView(monitorCard)
+        cleanupN06AAddSmartAlertsCard(root)
         cleanupN03TAddNotificationOptionsCard(root)
         cleanupN03ZForcePremiumConfigVisual(root)
 
@@ -4293,6 +4294,203 @@ private fun bottomNav(): LinearLayout {
         drawConfig()
     }
 
+
+
+        /*
+         * ALERTA_02_configuracoes_individuais
+         *
+         * Esta fase cria somente configuracoes.
+         * Ainda nao dispara som, vibracao, popup ou notificacao critica.
+         */
+        private fun cleanupN06AAddSmartAlertsCard(root: android.widget.LinearLayout) {
+            try {
+                val card = card()
+                card.background = cleanupN03XRoundBg("#FFFFFF", "#E3E8F1", 22, 1)
+                card.setPadding(dp(18), dp(18), dp(18), dp(18))
+
+                card.addView(android.widget.TextView(this).apply {
+                    text = "Alertas Inteligentes"
+                    textSize = 22f
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setTextColor(cleanupN03XColor("#111827"))
+                    setPadding(0, 0, 0, dp(6))
+                })
+
+                card.addView(cleanupN03XDesc(
+                    "Cada alerta possui ajuste próprio. Nesta etapa, as configurações são salvas; o alarme será ligado depois."
+                ))
+
+                fun addDetectorButton(detector: String) {
+                    val button = android.widget.Button(this)
+                    button.text = SmartAlertsManager.summary(this, detector)
+                    cleanupN03XStyleButton(button, selected = false, danger = false)
+                    button.gravity = android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
+                    button.setOnClickListener {
+                        cleanupN06AOpenDetectorDialog(detector)
+                    }
+
+                    card.addView(
+                        button,
+                        android.widget.LinearLayout.LayoutParams(
+                            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            setMargins(0, dp(4), 0, dp(4))
+                        }
+                    )
+                }
+
+                addDetectorButton(SmartAlertsManager.DETECTOR_STORAGE_LOW)
+                addDetectorButton(SmartAlertsManager.DETECTOR_CACHE_HIGH)
+                addDetectorButton(SmartAlertsManager.DETECTOR_LARGE_FILE)
+                addDetectorButton(SmartAlertsManager.DETECTOR_FAST_GROWTH)
+
+                val globalButton = android.widget.Button(this)
+                globalButton.text = if (SmartAlertsManager.isMasterEnabled(this)) {
+                    "Desligar todos os alertas"
+                } else {
+                    "Ligar alertas inteligentes"
+                }
+
+                cleanupN03XStyleButton(
+                    globalButton,
+                    selected = false,
+                    danger = SmartAlertsManager.isMasterEnabled(this)
+                )
+
+                globalButton.setOnClickListener {
+                    SmartAlertsManager.setMasterEnabled(
+                        this,
+                        !SmartAlertsManager.isMasterEnabled(this)
+                    )
+                    drawConfig()
+                }
+
+                card.addView(
+                    globalButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(10), 0, 0)
+                    }
+                )
+
+                root.addView(card)
+            } catch (_: Throwable) {
+            }
+        }
+
+        private fun cleanupN06AOpenDetectorDialog(detector: String) {
+            try {
+                val current = SmartAlertsManager.read(this, detector)
+
+                val container = android.widget.LinearLayout(this)
+                container.orientation = android.widget.LinearLayout.VERTICAL
+                container.setPadding(dp(22), dp(8), dp(22), dp(4))
+
+                val enabled = android.widget.CheckBox(this)
+                enabled.text = "Ativar este alerta"
+                enabled.isChecked = current.enabled
+                container.addView(enabled)
+
+                val limitLabel = android.widget.TextView(this)
+                limitLabel.text = SmartAlertsManager.limitLabel(detector)
+                limitLabel.textSize = 14f
+                limitLabel.setPadding(0, dp(12), 0, dp(4))
+                container.addView(limitLabel)
+
+                val limitInput = android.widget.EditText(this)
+                limitInput.inputType =
+                    android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                limitInput.setText(SmartAlertsManager.formatLimit(current.limitGb))
+                limitInput.hint = SmartAlertsManager.defaultLimitHint(detector)
+                container.addView(limitInput)
+
+                val repeatLabel = android.widget.TextView(this)
+                repeatLabel.text = "Repetir alerta"
+                repeatLabel.textSize = 14f
+                repeatLabel.setPadding(0, dp(12), 0, dp(4))
+                container.addView(repeatLabel)
+
+                val repeats = arrayOf("Nunca", "30 min", "1 hora", "3 horas", "6 horas")
+                val repeatSpinner = android.widget.Spinner(this)
+                val adapter = android.widget.ArrayAdapter(
+                    this,
+                    android.R.layout.simple_spinner_dropdown_item,
+                    repeats
+                )
+                repeatSpinner.adapter = adapter
+                repeatSpinner.setSelection(SmartAlertsManager.repeatIndex(current.repeatMinutes))
+                container.addView(repeatSpinner)
+
+                val sound = android.widget.CheckBox(this)
+                sound.text = "Tocar som quando este alerta disparar"
+                sound.isChecked = current.sound
+                sound.setPadding(0, dp(12), 0, 0)
+                container.addView(sound)
+
+                val vibration = android.widget.CheckBox(this)
+                vibration.text = "Vibrar quando este alerta disparar"
+                vibration.isChecked = current.vibration
+                container.addView(vibration)
+
+                val popup = android.widget.CheckBox(this)
+                popup.text = "Mostrar pop-up quando o app estiver aberto"
+                popup.isChecked = current.popup
+                container.addView(popup)
+
+                android.app.AlertDialog.Builder(this)
+                    .setTitle(SmartAlertsManager.title(detector))
+                    .setView(container)
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Salvar") { _, _ ->
+                        val raw = limitInput.text?.toString()
+                            ?.trim()
+                            ?.replace(",", ".")
+                            ?: ""
+
+                        val parsed = raw.toDoubleOrNull()
+
+                        if (parsed == null || parsed <= 0.0) {
+                            android.widget.Toast.makeText(
+                                this,
+                                "Informe um limite maior que zero",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            SmartAlertsManager.save(
+                                context = this,
+                                detector = detector,
+                                enabled = enabled.isChecked,
+                                limitGb = SmartAlertsManager.normalizeLimit(detector, parsed),
+                                sound = sound.isChecked,
+                                vibration = vibration.isChecked,
+                                popup = popup.isChecked,
+                                repeatMinutes = SmartAlertsManager.repeatMinutesFromIndex(
+                                    repeatSpinner.selectedItemPosition
+                                )
+                            )
+
+                            drawConfig()
+
+                            android.widget.Toast.makeText(
+                                this,
+                                "Configuração salva",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    .show()
+            } catch (_: Throwable) {
+                android.widget.Toast.makeText(
+                    this,
+                    "Não foi possível abrir a configuração do alerta",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
 
         private fun cleanupN03TPrefs(): android.content.SharedPreferences {
         return getSharedPreferences("monitor_premium", MODE_PRIVATE)
