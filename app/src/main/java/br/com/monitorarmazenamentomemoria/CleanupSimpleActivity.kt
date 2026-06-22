@@ -3071,59 +3071,194 @@ private fun openFile(item: FileItem) {
     private fun scanFiles() {
         if (!hasStorageAccess()) {
             allFiles = emptyList()
+
             runOnUiThread {
                 if (::statusText.isInitialized) {
                     statusText.text = "Acesso aos arquivos ainda não liberado"
                 }
             }
+
             return
         }
 
         thread {
             val result = mutableListOf<FileItem>()
+            val indexedPaths = mutableSetOf<String>()
             val started = System.currentTimeMillis()
-            val maxFiles = 30000
 
-            fun scan(dir: File, depth: Int) {
+            /*
+             * FIX_WHATSAPP_MULTI_RAIZES_PRIORIDADE
+             *
+             * Primeiro lê as pastas reais de mídia recebida do WhatsApp.
+             * Isso evita que Downloads, GIFs e outras pastas grandes consumam
+             * todo o tempo antes de chegar aos vídeos recentes.
+             */
+            fun addFile(file: File) {
+                if (!file.isFile) return
+                if (!indexedPaths.add(file.absolutePath)) return
+
+                result.add(
+                    FileItem(
+                        name = file.name,
+                        path = file.absolutePath,
+                        size = file.length(),
+                        modified = file.lastModified(),
+                        type = fileType(file),
+                        category = fileCategory(file),
+                        risk = fileRisk(file)
+                    )
+                )
+            }
+
+            fun scan(dir: File, depth: Int, maxDepth: Int, maxFiles: Int, maxMillis: Long) {
                 if (result.size >= maxFiles) return
-                if (depth > 10) return
-                if (System.currentTimeMillis() - started > 30000) return
+                if (depth > maxDepth) return
+                if (System.currentTimeMillis() - started > maxMillis) return
 
-                val list = try { dir.listFiles() } catch (_: Exception) { null } ?: return
+                val children = try {
+                    dir.listFiles()
+                } catch (_: Throwable) {
+                    null
+                } ?: return
 
-                for (f in list) {
+                for (child in children) {
                     if (result.size >= maxFiles) return
-                    if (System.currentTimeMillis() - started > 30000) return
+                    if (System.currentTimeMillis() - started > maxMillis) return
 
                     try {
-                        if (f.isDirectory) {
-                            if (!f.name.startsWith(".")) scan(f, depth + 1)
+                        if (child.isDirectory) {
+                            if (!child.name.startsWith(".")) {
+                                scan(child, depth + 1, maxDepth, maxFiles, maxMillis)
+                            }
                         } else {
-                            result.add(
-                                FileItem(
-                                    name = f.name,
-                                    path = f.absolutePath,
-                                    size = f.length(),
-                                    modified = f.lastModified(),
-                                    type = fileType(f),
-                                    category = fileCategory(f),
-                                    risk = fileRisk(f)
-                                )
-                            )
+                            addFile(child)
                         }
-                    } catch (_: Exception) {}
+                    } catch (_: Throwable) {
+                    }
                 }
             }
 
-            for (rootDir in importantRoots()) {
-                if (rootDir.exists()) scan(rootDir, 0)
+            val storageBases = linkedSetOf<File>()
+
+            try {
+                storageBases.add(Environment.getExternalStorageDirectory())
+            } catch (_: Throwable) {
             }
 
-            allFiles = result.distinctBy { it.path }
+            try {
+                File("/storage/emulated").listFiles()
+                    ?.filter { it.isDirectory && it.name.all(Char::isDigit) }
+                    ?.forEach { storageBases.add(it) }
+            } catch (_: Throwable) {
+            }
+
+            val whatsappRoots = linkedSetOf<File>()
+
+            fun addWhatsappFolders(base: File, packageName: String, appFolder: String, prefix: String) {
+                val media = File(base, "Android/media/$packageName/$appFolder/Media")
+
+                listOf(
+                    "$prefix Video",
+                    "$prefix Images",
+                    "$prefix Documents",
+                    "$prefix Audio",
+                    "$prefix Voice Notes",
+                    "$prefix Animated Gifs",
+                    "$prefix Stickers"
+                ).forEach { folder ->
+                    val candidate = File(media, folder)
+
+                    if (candidate.exists() && candidate.isDirectory) {
+                        whatsappRoots.add(candidate)
+                    }
+                }
+            }
+
+            storageBases.forEach { base ->
+                addWhatsappFolders(
+                    base,
+                    "com.whatsapp",
+                    "WhatsApp",
+                    "WhatsApp"
+                )
+
+                addWhatsappFolders(
+                    base,
+                    "com.whatsapp.w4b",
+                    "WhatsApp Business",
+                    "WhatsApp Business"
+                )
+
+                val legacyMedia = File(base, "WhatsApp/Media")
+
+                listOf(
+                    "WhatsApp Video",
+                    "WhatsApp Images",
+                    "WhatsApp Documents",
+                    "WhatsApp Audio",
+                    "WhatsApp Voice Notes",
+                    "WhatsApp Animated Gifs",
+                    "WhatsApp Stickers"
+                ).forEach { folder ->
+                    val candidate = File(legacyMedia, folder)
+
+                    if (candidate.exists() && candidate.isDirectory) {
+                        whatsappRoots.add(candidate)
+                    }
+                }
+            }
+
+            /*
+             * WhatsApp primeiro: profundidade pequena e rápida.
+             * Inclui subpastas úteis, mas ignora Sent na classificação depois.
+             */
+            whatsappRoots.forEach { root ->
+                scan(
+                    dir = root,
+                    depth = 0,
+                    maxDepth = 3,
+                    maxFiles = 12000,
+                    maxMillis = 9000L
+                )
+            }
+
+            /*
+             * Depois mantém a leitura geral, mas não repete as raízes do WhatsApp.
+             * Isso reduz bastante o risco de travamento.
+             */
+            importantRoots().forEach { root ->
+                val normalized = root.absolutePath.lowercase()
+
+                val isWhatsappRoot =
+                    normalized.contains("/whatsapp") ||
+                    normalized.contains("com.whatsapp") ||
+                    normalized.contains("com.whatsapp.w4b")
+
+                if (!isWhatsappRoot && root.exists()) {
+                    scan(
+                        dir = root,
+                        depth = 0,
+                        maxDepth = 7,
+                        maxFiles = 18000,
+                        maxMillis = 18000L
+                    )
+                }
+            }
+
+            allFiles = result
+                .distinctBy { it.path }
+                .sortedByDescending { it.modified }
 
             runOnUiThread {
-                if (currentCategory.isBlank()) drawHome()
-                else showCategory(currentCategory, "")
+                if (::statusText.isInitialized) {
+                    statusText.text = "${allFiles.size} arquivos analisados"
+                }
+
+                if (currentCategory.isBlank()) {
+                    drawHome()
+                } else {
+                    showCategory(currentCategory, "")
+                }
             }
         }
     }

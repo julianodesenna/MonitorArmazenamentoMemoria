@@ -421,13 +421,10 @@ object SmartAlertEngine {
 
     private fun whatsappReceivedRoots(): List<File> {
         /*
-         * WHATSAPP_MULTI_INSTALACOES
+         * FIX_WHATSAPP_MULTI_RAIZES_PRIORIDADE
          *
-         * Samsung Dual Messenger pode usar outro perfil em /storage/emulated/<id>.
-         * Não assumimos apenas o perfil principal do Android.
-         *
-         * Busca somente pastas específicas do WhatsApp.
-         * NÃO varre armazenamento inteiro.
+         * Procura WhatsApp normal, Dual Messenger, Business e estrutura antiga.
+         * Não varre o armazenamento inteiro.
          */
         val storageBases = linkedSetOf<File>()
 
@@ -437,8 +434,7 @@ object SmartAlertEngine {
         }
 
         try {
-            val emulated = File("/storage/emulated")
-            emulated.listFiles()
+            File("/storage/emulated").listFiles()
                 ?.filter { it.isDirectory && it.name.all(Char::isDigit) }
                 ?.forEach { storageBases.add(it) }
         } catch (_: Throwable) {
@@ -446,21 +442,20 @@ object SmartAlertEngine {
 
         val result = linkedSetOf<File>()
 
-        fun addMediaRoots(base: File, packageName: String, appFolder: String, prefix: String) {
+        fun addFolders(base: File, packageName: String, appFolder: String, prefix: String) {
             val media = File(base, "Android/media/$packageName/$appFolder/Media")
 
-            val folders = listOf(
-                "$prefix Images",
+            listOf(
                 "$prefix Video",
+                "$prefix Images",
                 "$prefix Documents",
                 "$prefix Audio",
                 "$prefix Voice Notes",
                 "$prefix Animated Gifs",
                 "$prefix Stickers"
-            )
-
-            folders.forEach { folder ->
+            ).forEach { folder ->
                 val candidate = File(media, folder)
+
                 if (candidate.exists() && candidate.isDirectory) {
                     result.add(candidate)
                 }
@@ -468,35 +463,35 @@ object SmartAlertEngine {
         }
 
         storageBases.forEach { base ->
-            addMediaRoots(
-                base = base,
-                packageName = "com.whatsapp",
-                appFolder = "WhatsApp",
-                prefix = "WhatsApp"
+            addFolders(
+                base,
+                "com.whatsapp",
+                "WhatsApp",
+                "WhatsApp"
             )
 
-            addMediaRoots(
-                base = base,
-                packageName = "com.whatsapp.w4b",
-                appFolder = "WhatsApp Business",
-                prefix = "WhatsApp Business"
+            addFolders(
+                base,
+                "com.whatsapp.w4b",
+                "WhatsApp Business",
+                "WhatsApp Business"
             )
 
-            val legacyWhatsapp = File(base, "WhatsApp/Media")
-            if (legacyWhatsapp.exists() && legacyWhatsapp.isDirectory) {
-                listOf(
-                    "WhatsApp Images",
-                    "WhatsApp Video",
-                    "WhatsApp Documents",
-                    "WhatsApp Audio",
-                    "WhatsApp Voice Notes",
-                    "WhatsApp Animated Gifs",
-                    "WhatsApp Stickers"
-                ).forEach { folder ->
-                    val candidate = File(legacyWhatsapp, folder)
-                    if (candidate.exists() && candidate.isDirectory) {
-                        result.add(candidate)
-                    }
+            val legacyMedia = File(base, "WhatsApp/Media")
+
+            listOf(
+                "WhatsApp Video",
+                "WhatsApp Images",
+                "WhatsApp Documents",
+                "WhatsApp Audio",
+                "WhatsApp Voice Notes",
+                "WhatsApp Animated Gifs",
+                "WhatsApp Stickers"
+            ).forEach { folder ->
+                val candidate = File(legacyMedia, folder)
+
+                if (candidate.exists() && candidate.isDirectory) {
+                    result.add(candidate)
                 }
             }
         }
