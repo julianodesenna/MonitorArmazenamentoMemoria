@@ -420,15 +420,88 @@ object SmartAlertEngine {
     private data class WhatsappFile(val name: String, val path: String, val size: Long, val modified: Long, val folder: String)
 
     private fun whatsappReceivedRoots(): List<File> {
-        val base = Environment.getExternalStorageDirectory()
-        val normal = File(base, "Android/media/com.whatsapp/WhatsApp/Media")
-        val business = File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media")
-        fun roots(media: File, prefix: String) = listOf(
-            File(media, "$prefix Images"), File(media, "$prefix Video"),
-            File(media, "$prefix Documents"), File(media, "$prefix Audio"),
-            File(media, "$prefix Stickers")
-        )
-        return (roots(normal, "WhatsApp") + roots(business, "WhatsApp Business")).filter { it.exists() }
+        /*
+         * WHATSAPP_MULTI_INSTALACOES
+         *
+         * Samsung Dual Messenger pode usar outro perfil em /storage/emulated/<id>.
+         * Não assumimos apenas o perfil principal do Android.
+         *
+         * Busca somente pastas específicas do WhatsApp.
+         * NÃO varre armazenamento inteiro.
+         */
+        val storageBases = linkedSetOf<File>()
+
+        try {
+            storageBases.add(Environment.getExternalStorageDirectory())
+        } catch (_: Throwable) {
+        }
+
+        try {
+            val emulated = File("/storage/emulated")
+            emulated.listFiles()
+                ?.filter { it.isDirectory && it.name.all(Char::isDigit) }
+                ?.forEach { storageBases.add(it) }
+        } catch (_: Throwable) {
+        }
+
+        val result = linkedSetOf<File>()
+
+        fun addMediaRoots(base: File, packageName: String, appFolder: String, prefix: String) {
+            val media = File(base, "Android/media/$packageName/$appFolder/Media")
+
+            val folders = listOf(
+                "$prefix Images",
+                "$prefix Video",
+                "$prefix Documents",
+                "$prefix Audio",
+                "$prefix Voice Notes",
+                "$prefix Animated Gifs",
+                "$prefix Stickers"
+            )
+
+            folders.forEach { folder ->
+                val candidate = File(media, folder)
+                if (candidate.exists() && candidate.isDirectory) {
+                    result.add(candidate)
+                }
+            }
+        }
+
+        storageBases.forEach { base ->
+            addMediaRoots(
+                base = base,
+                packageName = "com.whatsapp",
+                appFolder = "WhatsApp",
+                prefix = "WhatsApp"
+            )
+
+            addMediaRoots(
+                base = base,
+                packageName = "com.whatsapp.w4b",
+                appFolder = "WhatsApp Business",
+                prefix = "WhatsApp Business"
+            )
+
+            val legacyWhatsapp = File(base, "WhatsApp/Media")
+            if (legacyWhatsapp.exists() && legacyWhatsapp.isDirectory) {
+                listOf(
+                    "WhatsApp Images",
+                    "WhatsApp Video",
+                    "WhatsApp Documents",
+                    "WhatsApp Audio",
+                    "WhatsApp Voice Notes",
+                    "WhatsApp Animated Gifs",
+                    "WhatsApp Stickers"
+                ).forEach { folder ->
+                    val candidate = File(legacyWhatsapp, folder)
+                    if (candidate.exists() && candidate.isDirectory) {
+                        result.add(candidate)
+                    }
+                }
+            }
+        }
+
+        return result.toList()
     }
 
     private fun showWhatsappFileNotification(context: Context, item: WhatsappFile, setting: SmartAlertsManager.DetectorSettings) {
