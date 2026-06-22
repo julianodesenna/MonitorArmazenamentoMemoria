@@ -1,4 +1,3 @@
-================================================================================
 package br.com.monitorarmazenamentomemoria
 
 import android.app.Notification

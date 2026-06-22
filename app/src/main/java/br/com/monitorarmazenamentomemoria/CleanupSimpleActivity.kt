@@ -1,4 +1,3 @@
-================================================================================
 package br.com.monitorarmazenamentomemoria
 import android.content.pm.PackageInstaller
 import androidx.core.content.FileProvider
