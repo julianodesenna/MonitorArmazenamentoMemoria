@@ -3071,194 +3071,59 @@ private fun openFile(item: FileItem) {
     private fun scanFiles() {
         if (!hasStorageAccess()) {
             allFiles = emptyList()
-
             runOnUiThread {
                 if (::statusText.isInitialized) {
                     statusText.text = "Acesso aos arquivos ainda não liberado"
                 }
             }
-
             return
         }
 
         thread {
             val result = mutableListOf<FileItem>()
-            val indexedPaths = mutableSetOf<String>()
             val started = System.currentTimeMillis()
+            val maxFiles = 30000
 
-            /*
-             * FIX_WHATSAPP_MULTI_RAIZES_PRIORIDADE
-             *
-             * Primeiro lê as pastas reais de mídia recebida do WhatsApp.
-             * Isso evita que Downloads, GIFs e outras pastas grandes consumam
-             * todo o tempo antes de chegar aos vídeos recentes.
-             */
-            fun addFile(file: File) {
-                if (!file.isFile) return
-                if (!indexedPaths.add(file.absolutePath)) return
-
-                result.add(
-                    FileItem(
-                        name = file.name,
-                        path = file.absolutePath,
-                        size = file.length(),
-                        modified = file.lastModified(),
-                        type = fileType(file),
-                        category = fileCategory(file),
-                        risk = fileRisk(file)
-                    )
-                )
-            }
-
-            fun scan(dir: File, depth: Int, maxDepth: Int, maxFiles: Int, maxMillis: Long) {
+            fun scan(dir: File, depth: Int) {
                 if (result.size >= maxFiles) return
-                if (depth > maxDepth) return
-                if (System.currentTimeMillis() - started > maxMillis) return
+                if (depth > 10) return
+                if (System.currentTimeMillis() - started > 30000) return
 
-                val children = try {
-                    dir.listFiles()
-                } catch (_: Throwable) {
-                    null
-                } ?: return
+                val list = try { dir.listFiles() } catch (_: Exception) { null } ?: return
 
-                for (child in children) {
+                for (f in list) {
                     if (result.size >= maxFiles) return
-                    if (System.currentTimeMillis() - started > maxMillis) return
+                    if (System.currentTimeMillis() - started > 30000) return
 
                     try {
-                        if (child.isDirectory) {
-                            if (!child.name.startsWith(".")) {
-                                scan(child, depth + 1, maxDepth, maxFiles, maxMillis)
-                            }
+                        if (f.isDirectory) {
+                            if (!f.name.startsWith(".")) scan(f, depth + 1)
                         } else {
-                            addFile(child)
+                            result.add(
+                                FileItem(
+                                    name = f.name,
+                                    path = f.absolutePath,
+                                    size = f.length(),
+                                    modified = f.lastModified(),
+                                    type = fileType(f),
+                                    category = fileCategory(f),
+                                    risk = fileRisk(f)
+                                )
+                            )
                         }
-                    } catch (_: Throwable) {
-                    }
+                    } catch (_: Exception) {}
                 }
             }
 
-            val storageBases = linkedSetOf<File>()
-
-            try {
-                storageBases.add(Environment.getExternalStorageDirectory())
-            } catch (_: Throwable) {
+            for (rootDir in importantRoots()) {
+                if (rootDir.exists()) scan(rootDir, 0)
             }
 
-            try {
-                File("/storage/emulated").listFiles()
-                    ?.filter { it.isDirectory && it.name.all(Char::isDigit) }
-                    ?.forEach { storageBases.add(it) }
-            } catch (_: Throwable) {
-            }
-
-            val whatsappRoots = linkedSetOf<File>()
-
-            fun addWhatsappFolders(base: File, packageName: String, appFolder: String, prefix: String) {
-                val media = File(base, "Android/media/$packageName/$appFolder/Media")
-
-                listOf(
-                    "$prefix Video",
-                    "$prefix Images",
-                    "$prefix Documents",
-                    "$prefix Audio",
-                    "$prefix Voice Notes",
-                    "$prefix Animated Gifs",
-                    "$prefix Stickers"
-                ).forEach { folder ->
-                    val candidate = File(media, folder)
-
-                    if (candidate.exists() && candidate.isDirectory) {
-                        whatsappRoots.add(candidate)
-                    }
-                }
-            }
-
-            storageBases.forEach { base ->
-                addWhatsappFolders(
-                    base,
-                    "com.whatsapp",
-                    "WhatsApp",
-                    "WhatsApp"
-                )
-
-                addWhatsappFolders(
-                    base,
-                    "com.whatsapp.w4b",
-                    "WhatsApp Business",
-                    "WhatsApp Business"
-                )
-
-                val legacyMedia = File(base, "WhatsApp/Media")
-
-                listOf(
-                    "WhatsApp Video",
-                    "WhatsApp Images",
-                    "WhatsApp Documents",
-                    "WhatsApp Audio",
-                    "WhatsApp Voice Notes",
-                    "WhatsApp Animated Gifs",
-                    "WhatsApp Stickers"
-                ).forEach { folder ->
-                    val candidate = File(legacyMedia, folder)
-
-                    if (candidate.exists() && candidate.isDirectory) {
-                        whatsappRoots.add(candidate)
-                    }
-                }
-            }
-
-            /*
-             * WhatsApp primeiro: profundidade pequena e rápida.
-             * Inclui subpastas úteis, mas ignora Sent na classificação depois.
-             */
-            whatsappRoots.forEach { root ->
-                scan(
-                    dir = root,
-                    depth = 0,
-                    maxDepth = 3,
-                    maxFiles = 12000,
-                    maxMillis = 9000L
-                )
-            }
-
-            /*
-             * Depois mantém a leitura geral, mas não repete as raízes do WhatsApp.
-             * Isso reduz bastante o risco de travamento.
-             */
-            importantRoots().forEach { root ->
-                val normalized = root.absolutePath.lowercase()
-
-                val isWhatsappRoot =
-                    normalized.contains("/whatsapp") ||
-                    normalized.contains("com.whatsapp") ||
-                    normalized.contains("com.whatsapp.w4b")
-
-                if (!isWhatsappRoot && root.exists()) {
-                    scan(
-                        dir = root,
-                        depth = 0,
-                        maxDepth = 7,
-                        maxFiles = 18000,
-                        maxMillis = 18000L
-                    )
-                }
-            }
-
-            allFiles = result
-                .distinctBy { it.path }
-                .sortedByDescending { it.modified }
+            allFiles = result.distinctBy { it.path }
 
             runOnUiThread {
-                if (::statusText.isInitialized) {
-                    statusText.text = "${allFiles.size} arquivos analisados"
-                }
-
-                if (currentCategory.isBlank()) {
-                    drawHome()
-                } else {
-                    showCategory(currentCategory, "")
-                }
+                if (currentCategory.isBlank()) drawHome()
+                else showCategory(currentCategory, "")
             }
         }
     }
@@ -4586,6 +4451,35 @@ private fun bottomNav(): LinearLayout {
                 )
 
 
+                val overlayPermissionButton = android.widget.Button(this)
+                overlayPermissionButton.isAllCaps = false
+                overlayPermissionButton.text =
+                    if (SmartAlertOverlay.canShow(this)) {
+                        "ALERTAS SOBRE OUTROS APPS: PERMITIDO"
+                    } else {
+                        "PERMITIR ALERTAS SOBRE OUTROS APPS"
+                    }
+
+                cleanupN03XStyleButton(
+                    overlayPermissionButton,
+                    selected = SmartAlertOverlay.canShow(this),
+                    danger = !SmartAlertOverlay.canShow(this)
+                )
+
+                overlayPermissionButton.setOnClickListener {
+                    cleanupSOBREPOR06RequestOverlayPermission()
+                }
+
+                card.addView(
+                    overlayPermissionButton,
+                    android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        setMargins(0, dp(8), 0, 0)
+                    }
+                )
+
                 val testOverlayButton = android.widget.Button(this)
                 testOverlayButton.text = "TESTAR ALERTA SOBRE OUTROS APPS"
                 testOverlayButton.isAllCaps = false
@@ -4805,7 +4699,7 @@ private fun bottomNav(): LinearLayout {
                 container.addView(vibration)
 
                 val popup = android.widget.CheckBox(this).apply {
-                    text = "Mostrar alerta na tela mesmo usando outro app"
+                    text = "Mostrar pop-up quando o app estiver aberto"
                     isChecked = current.popup
                 }
                 container.addView(popup)
@@ -4843,17 +4737,6 @@ private fun bottomNav(): LinearLayout {
                                 repeatSpinner.selectedItemPosition
                             )
                         )
-
-                        if (enabled.isChecked && popup.isChecked && !SmartAlertOverlay.canShow(this)) {
-                            android.app.AlertDialog.Builder(this)
-                                .setTitle("Permitir alertas na tela?")
-                                .setMessage("Para mostrar o alerta por cima do WhatsApp e de outros aplicativos, o Monitor precisa da permissão “Aparecer sobre outros apps”.")
-                                .setNegativeButton("Agora não", null)
-                                .setPositiveButton("Permitir") { _, _ ->
-                                    cleanupSOBREPOR06RequestOverlayPermission()
-                                }
-                                .show()
-                        }
 
                         // Atualiza somente o card tocado; nao recarrega toda a tela.
                         sourceButton.text = SmartAlertsManager.summary(this, detector)
