@@ -1,3 +1,4 @@
+================================================================================
 package br.com.monitorarmazenamentomemoria
 import android.content.pm.PackageInstaller
 import androidx.core.content.FileProvider
@@ -90,6 +91,44 @@ super.onCreate(savedInstanceState)
         buildScreen()
         scanFiles()
         drawHome()
+        handleWhatsappNotificationAction(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWhatsappNotificationAction(intent)
+    }
+
+    private fun handleWhatsappNotificationAction(actionIntent: Intent?) {
+        val action = actionIntent?.getStringExtra("whatsapp_action") ?: return
+        val path = actionIntent.getStringExtra("whatsapp_path") ?: return
+        val file = File(path)
+        actionIntent.removeExtra("whatsapp_action")
+        when (action) {
+            "open" -> openFile(FileItem(
+                name = file.name,
+                path = file.absolutePath,
+                size = file.length(),
+                modified = file.lastModified(),
+                type = "Arquivo do WhatsApp",
+                category = "WhatsApp",
+                risk = "normal"
+            ))
+            "folder" -> {
+                Toast.makeText(this, "Pasta: ${file.parent ?: "WhatsApp"}", Toast.LENGTH_LONG).show()
+                root.post { showCategory("WhatsApp", cleanupCategoryDesc("WhatsApp")) }
+            }
+            "delete" -> AlertDialog.Builder(this)
+                .setTitle("Excluir arquivo?")
+                .setMessage("${file.name}\n\nEsta ação apaga o arquivo do WhatsApp. Confirme somente se tiver certeza.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Excluir") { _, _ ->
+                    val deleted = try { file.exists() && file.delete() } catch (_: Throwable) { false }
+                    Toast.makeText(this, if (deleted) "Arquivo excluído" else "Não foi possível excluir. Verifique o acesso aos arquivos.", Toast.LENGTH_LONG).show()
+                    if (deleted) scanFiles()
+                }.show()
+        }
     }
 
     override fun onBackPressed() {
@@ -3116,8 +3155,7 @@ private fun openFile(item: FileItem) {
             File(base, "WhatsApp"),
             File(base, "Android/media/com.whatsapp"),
             File(base, "Android/media/com.whatsapp.w4b"),
-            File(base, "Android/media"),
-            base
+            // Não usar raiz do armazenamento: varredura ampla pode congelar o app.
         ).distinctBy { it.absolutePath }
     }
 
@@ -4358,6 +4396,7 @@ private fun bottomNav(): LinearLayout {
                 addCardButton(SmartAlertsManager.DETECTOR_CACHE_HIGH)
                 addCardButton(SmartAlertsManager.DETECTOR_LARGE_FILE)
                 addCardButton(SmartAlertsManager.DETECTOR_FAST_GROWTH)
+                addCardButton(SmartAlertsManager.DETECTOR_WHATSAPP_FILE)
 
                 val masterButton = android.widget.Button(this)
                 masterButton.isAllCaps = false

@@ -1,3 +1,4 @@
+================================================================================
 package br.com.monitorarmazenamentomemoria
 
 import android.app.Notification
@@ -15,6 +16,8 @@ import android.os.StatFs
 import android.os.VibrationEffect
 import android.os.Vibrator
 import java.util.Locale
+import java.io.File
+import android.content.SharedPreferences
 import kotlin.math.roundToInt
 
 /*
@@ -44,6 +47,7 @@ object SmartAlertEngine {
     private const val ID_FAST_GROWTH = 9043
     private const val ID_LARGE_FILE = 9044
     private const val ID_TEST = 9099
+    private const val ID_WHATSAPP_FILE = 9045
 
     private const val FAST_GROWTH_WINDOW_MS = 24L * 60L * 60L * 1000L
 
@@ -56,6 +60,7 @@ object SmartAlertEngine {
             checkStorageLow(context, forceNotify = false)
             checkCacheHigh(context, forceNotify = false)
             checkFastGrowth(context, forceNotify = false)
+            checkWhatsappReceivedFile(context, forceNotify = false)
             // ARQUIVO_10 pausado temporariamente: varredura sera movida para tarefa leve em segundo plano.
         } catch (_: Throwable) {
         }
@@ -74,6 +79,7 @@ object SmartAlertEngine {
             checkStorageLow(context, forceNotify = true)
             checkCacheHigh(context, forceNotify = true)
             checkFastGrowth(context, forceNotify = true)
+            checkWhatsappReceivedFile(context, forceNotify = true)
             // ARQUIVO_10 pausado temporariamente: Atualizar nao fara varredura pesada.
         } catch (_: Throwable) {
         }
@@ -368,6 +374,99 @@ object SmartAlertEngine {
             },
             forceNotify = forceNotify && found != null
         )
+    }
+
+    /*
+     * WHATSAPP_01
+     * Varre somente pastas de RECEBIDOS do WhatsApp. Não percorre o armazenamento
+     * inteiro e nunca roda na abertura da aba Limpeza.
+     */
+    private fun checkWhatsappReceivedFile(context: Context, forceNotify: Boolean) {
+        val setting = SmartAlertsManager.read(context, SmartAlertsManager.DETECTOR_WHATSAPP_FILE)
+        if (!setting.enabled) {
+            notificationManager(context).cancel(ID_WHATSAPP_FILE)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) return
+
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val roots = whatsappReceivedRoots()
+        val current = mutableListOf<WhatsappFile>()
+        val minBytes = (setting.limitGb * 1024.0 * 1024.0 * 1024.0).toLong().coerceAtLeast(1L)
+        for (root in roots) {
+            val files = try { root.listFiles() } catch (_: Throwable) { null } ?: continue
+            for (file in files) {
+                try {
+                    if (file.isFile && file.length() >= minBytes) {
+                        current += WhatsappFile(file.name, file.absolutePath, file.length(), file.lastModified(), root.name)
+                    }
+                } catch (_: Throwable) { }
+            }
+        }
+        val knownKey = "whatsapp_known_paths"
+        val initializedKey = "whatsapp_initialized"
+        val known = prefs.getStringSet(knownKey, emptySet())?.toMutableSet() ?: mutableSetOf()
+        val nowKeys = current.map { it.path + "|" + it.modified + "|" + it.size }.toSet()
+        if (!prefs.getBoolean(initializedKey, false)) {
+            prefs.edit().putBoolean(initializedKey, true).putStringSet(knownKey, nowKeys.take(1500).toSet()).apply()
+            return
+        }
+        val fresh = current.filter { (it.path + "|" + it.modified + "|" + it.size) !in known }
+            .maxByOrNull { it.modified }
+        prefs.edit().putStringSet(knownKey, nowKeys.take(1500).toSet()).apply()
+        if (fresh == null) return
+        showWhatsappFileNotification(context, fresh, setting)
+    }
+
+    private data class WhatsappFile(val name: String, val path: String, val size: Long, val modified: Long, val folder: String)
+
+    private fun whatsappReceivedRoots(): List<File> {
+        val base = Environment.getExternalStorageDirectory()
+        val normal = File(base, "Android/media/com.whatsapp/WhatsApp/Media")
+        val business = File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media")
+        fun roots(media: File, prefix: String) = listOf(
+            File(media, "$prefix Images"), File(media, "$prefix Video"),
+            File(media, "$prefix Documents"), File(media, "$prefix Audio"),
+            File(media, "$prefix Stickers")
+        )
+        return (roots(normal, "WhatsApp") + roots(business, "WhatsApp Business")).filter { it.exists() }
+    }
+
+    private fun showWhatsappFileNotification(context: Context, item: WhatsappFile, setting: SmartAlertsManager.DetectorSettings) {
+        playDirectSoundAndVibration(context, setting.sound, setting.vibration)
+        if (setting.popup) SmartAlertOverlay.showIfAllowed(context, "Novo arquivo recebido no WhatsApp", item.name)
+        val openIntent = Intent(context, CleanupSimpleActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("whatsapp_action", "open")
+            putExtra("whatsapp_path", item.path)
+        }
+        val deleteIntent = Intent(context, CleanupSimpleActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("whatsapp_action", "delete")
+            putExtra("whatsapp_path", item.path)
+        }
+        val folderIntent = Intent(context, CleanupSimpleActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("whatsapp_action", "folder")
+            putExtra("whatsapp_path", item.path)
+        }
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, channelIdFor(false, false)) else Notification.Builder(context)
+        builder.setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Novo arquivo recebido no WhatsApp")
+            .setContentText("${item.name} • ${formatBytes(item.size)} • ${item.folder}")
+            .setStyle(Notification.BigTextStyle().bigText("${item.name}\n${formatBytes(item.size)} • ${item.folder}\n${item.path}"))
+            .setContentIntent(PendingIntent.getActivity(context, ID_WHATSAPP_FILE + 100, openIntent, pendingFlags()))
+            .addAction(Notification.Action.Builder(null, "Abrir", PendingIntent.getActivity(context, ID_WHATSAPP_FILE + 101, openIntent, pendingFlags())).build())
+            .addAction(Notification.Action.Builder(null, "Pasta", PendingIntent.getActivity(context, ID_WHATSAPP_FILE + 102, folderIntent, pendingFlags())).build())
+            .addAction(Notification.Action.Builder(null, "Excluir", PendingIntent.getActivity(context, ID_WHATSAPP_FILE + 103, deleteIntent, pendingFlags())).build())
+            .setAutoCancel(false).setVisibility(Notification.VISIBILITY_PUBLIC)
+        notificationManager(context).notify(ID_WHATSAPP_FILE, builder.build())
+    }
+
+    private fun formatBytes(value: Long): String {
+        return when { value >= 1024L*1024L*1024L -> String.format(Locale("pt", "BR"), "%.2f GB", value / 1073741824.0)
+            value >= 1024L*1024L -> String.format(Locale("pt", "BR"), "%.1f MB", value / 1048576.0)
+            else -> "${value / 1024L} KB" }
     }
 
     private fun processDetector(

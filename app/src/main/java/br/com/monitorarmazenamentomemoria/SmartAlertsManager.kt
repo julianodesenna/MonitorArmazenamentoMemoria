@@ -1,3 +1,4 @@
+================================================================================
 package br.com.monitorarmazenamentomemoria
 
 import android.content.Context
@@ -15,6 +16,7 @@ object SmartAlertsManager {
     const val DETECTOR_CACHE_HIGH = "cache_high"
     const val DETECTOR_LARGE_FILE = "large_file"
     const val DETECTOR_FAST_GROWTH = "fast_growth"
+    const val DETECTOR_WHATSAPP_FILE = "whatsapp_file"
 
     private const val PREFS = "smart_alerts_cards_03"
 
@@ -102,6 +104,9 @@ object SmartAlertsManager {
             DETECTOR_FAST_GROWTH ->
                 "perda acima de ${formatLimit(setting.limitGb)} GB em 24h"
 
+            DETECTOR_WHATSAPP_FILE ->
+                "arquivo recebido no WhatsApp acima de ${formatLimit(setting.limitGb)} GB"
+
             else -> ""
         }
 
@@ -114,6 +119,7 @@ object SmartAlertsManager {
             DETECTOR_CACHE_HIGH -> "Cache alto"
             DETECTOR_LARGE_FILE -> "Arquivo grande novo"
             DETECTOR_FAST_GROWTH -> "Crescimento rápido de uso"
+            DETECTOR_WHATSAPP_FILE -> "Arquivo recebido no WhatsApp"
             else -> "Alerta"
         }
     }
@@ -132,6 +138,9 @@ object SmartAlertsManager {
             DETECTOR_FAST_GROWTH ->
                 "Avisar se perder mais de quantos GB em 24 horas?"
 
+            DETECTOR_WHATSAPP_FILE ->
+                "Avisar quando chegar arquivo no WhatsApp acima de quantos GB?"
+
             else -> "Limite em GB"
         }
     }
@@ -140,13 +149,13 @@ object SmartAlertsManager {
         formatLimit(defaultLimit(detector))
 
     fun normalizeLimit(detector: String, value: Double): Double =
-        value.coerceIn(0.1, 999.0)
+        value.coerceIn(0.01, 999.0)
 
     fun formatLimit(value: Double): String {
         return if (value % 1.0 == 0.0) {
             value.toInt().toString()
         } else {
-            String.format(Locale.US, "%.1f", value)
+            String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
         }
     }
 
@@ -177,7 +186,8 @@ object SmartAlertsManager {
             DETECTOR_STORAGE_LOW,
             DETECTOR_CACHE_HIGH,
             DETECTOR_LARGE_FILE,
-            DETECTOR_FAST_GROWTH
+            DETECTOR_FAST_GROWTH,
+            DETECTOR_WHATSAPP_FILE
         )
     }
 
@@ -187,6 +197,7 @@ object SmartAlertsManager {
             DETECTOR_CACHE_HIGH -> 2.0
             DETECTOR_LARGE_FILE -> 1.0
             DETECTOR_FAST_GROWTH -> 2.0
+            DETECTOR_WHATSAPP_FILE -> 0.05
             else -> 1.0
         }
     }
