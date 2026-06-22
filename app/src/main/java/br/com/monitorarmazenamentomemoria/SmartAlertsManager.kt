@@ -148,13 +148,13 @@ object SmartAlertsManager {
         formatLimit(defaultLimit(detector))
 
     fun normalizeLimit(detector: String, value: Double): Double =
-        value.coerceIn(0.01, 999.0)
+        value.coerceIn(0.000001, 999.0)
 
     fun formatLimit(value: Double): String {
         return if (value % 1.0 == 0.0) {
             value.toInt().toString()
         } else {
-            String.format(Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+            String.format(Locale.US, "%.6f", value).trimEnd('0').trimEnd('.')
         }
     }
 

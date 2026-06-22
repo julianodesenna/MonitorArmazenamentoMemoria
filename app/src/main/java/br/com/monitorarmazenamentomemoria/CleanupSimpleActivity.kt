@@ -4451,35 +4451,6 @@ private fun bottomNav(): LinearLayout {
                 )
 
 
-                val overlayPermissionButton = android.widget.Button(this)
-                overlayPermissionButton.isAllCaps = false
-                overlayPermissionButton.text =
-                    if (SmartAlertOverlay.canShow(this)) {
-                        "ALERTAS SOBRE OUTROS APPS: PERMITIDO"
-                    } else {
-                        "PERMITIR ALERTAS SOBRE OUTROS APPS"
-                    }
-
-                cleanupN03XStyleButton(
-                    overlayPermissionButton,
-                    selected = SmartAlertOverlay.canShow(this),
-                    danger = !SmartAlertOverlay.canShow(this)
-                )
-
-                overlayPermissionButton.setOnClickListener {
-                    cleanupSOBREPOR06RequestOverlayPermission()
-                }
-
-                card.addView(
-                    overlayPermissionButton,
-                    android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        setMargins(0, dp(8), 0, 0)
-                    }
-                )
-
                 val testOverlayButton = android.widget.Button(this)
                 testOverlayButton.text = "TESTAR ALERTA SOBRE OUTROS APPS"
                 testOverlayButton.isAllCaps = false
@@ -4699,7 +4670,7 @@ private fun bottomNav(): LinearLayout {
                 container.addView(vibration)
 
                 val popup = android.widget.CheckBox(this).apply {
-                    text = "Mostrar pop-up quando o app estiver aberto"
+                    text = "Mostrar alerta na tela mesmo usando outro app"
                     isChecked = current.popup
                 }
                 container.addView(popup)
@@ -4737,6 +4708,17 @@ private fun bottomNav(): LinearLayout {
                                 repeatSpinner.selectedItemPosition
                             )
                         )
+
+                        if (enabled.isChecked && popup.isChecked && !SmartAlertOverlay.canShow(this)) {
+                            android.app.AlertDialog.Builder(this)
+                                .setTitle("Permitir alertas na tela?")
+                                .setMessage("Para mostrar o alerta por cima do WhatsApp e de outros aplicativos, o Monitor precisa da permissão “Aparecer sobre outros apps”.")
+                                .setNegativeButton("Agora não", null)
+                                .setPositiveButton("Permitir") { _, _ ->
+                                    cleanupSOBREPOR06RequestOverlayPermission()
+                                }
+                                .show()
+                        }
 
                         // Atualiza somente o card tocado; nao recarrega toda a tela.
                         sourceButton.text = SmartAlertsManager.summary(this, detector)

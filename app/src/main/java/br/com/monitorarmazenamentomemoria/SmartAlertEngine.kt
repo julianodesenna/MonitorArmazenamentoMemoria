@@ -519,11 +519,13 @@ object SmartAlertEngine {
             vibrationEnabled = setting.vibration
         )
 
-        SmartAlertOverlay.showIfAllowed(
-            context = context,
-            title = "⚠ $title",
-            message = text
-        )
+        if (setting.popup) {
+            SmartAlertOverlay.showIfAllowed(
+                context = context,
+                title = "⚠ $title",
+                message = text
+            )
+        }
 
         showNotification(
             context = context,
