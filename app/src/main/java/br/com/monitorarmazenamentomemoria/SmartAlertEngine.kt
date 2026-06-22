@@ -380,42 +380,106 @@ object SmartAlertEngine {
      * Varre somente pastas de RECEBIDOS do WhatsApp. Não percorre o armazenamento
      * inteiro e nunca roda na abertura da aba Limpeza.
      */
+    /*
+     * WHATSAPP_FIX_RECEBIDOS_01
+     *
+     * Mantém uma base por caminho, não por tamanho/data. Assim um arquivo que
+     * termina de baixar não é confundido com arquivo já conhecido. A primeira
+     * leitura é silenciosa; nas leituras seguintes, qualquer caminho novo acima
+     * do limite dispara uma notificação.
+     */
     private fun checkWhatsappReceivedFile(context: Context, forceNotify: Boolean) {
         val setting = SmartAlertsManager.read(context, SmartAlertsManager.DETECTOR_WHATSAPP_FILE)
         if (!setting.enabled) {
             notificationManager(context).cancel(ID_WHATSAPP_FILE)
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) return
 
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val roots = whatsappReceivedRoots()
-        val current = mutableListOf<WhatsappFile>()
-        val minBytes = (setting.limitGb * 1024.0 * 1024.0 * 1024.0).toLong().coerceAtLeast(1L)
-        for (root in roots) {
-            val files = try { root.listFiles() } catch (_: Throwable) { null } ?: continue
-            for (file in files) {
-                try {
-                    if (file.isFile && file.length() >= minBytes) {
-                        current += WhatsappFile(file.name, file.absolutePath, file.length(), file.lastModified(), root.name)
-                    }
-                } catch (_: Throwable) { }
-            }
-        }
-        val knownKey = "whatsapp_known_paths"
-        val initializedKey = "whatsapp_initialized"
-        val known = prefs.getStringSet(knownKey, emptySet())?.toMutableSet() ?: mutableSetOf()
-        val nowKeys = current.map { it.path + "|" + it.modified + "|" + it.size }.toSet()
-        if (!prefs.getBoolean(initializedKey, false)) {
-            prefs.edit().putBoolean(initializedKey, true).putStringSet(knownKey, nowKeys.take(1500).toSet()).apply()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
             return
         }
-        val fresh = current.filter { (it.path + "|" + it.modified + "|" + it.size) !in known }
+
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val minBytes = (setting.limitGb * 1024.0 * 1024.0 * 1024.0)
+            .toLong()
+            .coerceAtLeast(1L)
+
+        val current = mutableListOf<WhatsappFile>()
+        whatsappReceivedRoots().forEach { root ->
+            collectWhatsappReceivedFiles(root, root.name, minBytes, current)
+        }
+
+        val knownKey = "whatsapp_known_paths_v2"
+        val initializedKey = "whatsapp_initialized_v2"
+        val nowPaths = current
+            .sortedByDescending { it.modified }
+            .map { it.path }
+            .take(1800)
+            .toSet()
+
+        if (!prefs.getBoolean(initializedKey, false)) {
+            prefs.edit()
+                .putBoolean(initializedKey, true)
+                .putStringSet(knownKey, nowPaths)
+                .apply()
+            return
+        }
+
+        val known = prefs.getStringSet(knownKey, emptySet()) ?: emptySet()
+        val fresh = current
+            .asSequence()
+            .filter { it.path !in known }
+            .filter { it.modified >= System.currentTimeMillis() - (7L * 24L * 60L * 60L * 1000L) }
             .maxByOrNull { it.modified }
-        prefs.edit().putStringSet(knownKey, nowKeys.take(1500).toSet()).apply()
-        if (fresh == null) return
-        showWhatsappFileNotification(context, fresh, setting)
+
+        prefs.edit()
+            .putStringSet(knownKey, nowPaths)
+            .apply()
+
+        if (fresh != null) {
+            showWhatsappFileNotification(context, fresh, setting)
+        }
     }
+
+    private fun collectWhatsappReceivedFiles(
+        folder: File,
+        rootName: String,
+        minBytes: Long,
+        output: MutableList<WhatsappFile>
+    ) {
+        val queue = ArrayDeque<Pair<File, Int>>()
+        queue.add(folder to 0)
+
+        while (queue.isNotEmpty()) {
+            val (dir, depth) = queue.removeFirst()
+            val children = try { dir.listFiles() } catch (_: Throwable) { null } ?: continue
+
+            for (file in children) {
+                try {
+                    val nameLower = file.name.lowercase(Locale.ROOT)
+                    if (file.isDirectory) {
+                        if (depth < 2 && nameLower != "sent" && !nameLower.contains("sent")) {
+                            queue.add(file to depth + 1)
+                        }
+                    } else if (
+                        file.isFile &&
+                        file.length() >= minBytes &&
+                        !file.absolutePath.lowercase(Locale.ROOT).contains("/sent/")
+                    ) {
+                        output += WhatsappFile(
+                            file.name,
+                            file.absolutePath,
+                            file.length(),
+                            file.lastModified(),
+                            rootName
+                        )
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+        }
+    }
+
 
     private data class WhatsappFile(val name: String, val path: String, val size: Long, val modified: Long, val folder: String)
 
@@ -423,13 +487,20 @@ object SmartAlertEngine {
         val base = Environment.getExternalStorageDirectory()
         val normal = File(base, "Android/media/com.whatsapp/WhatsApp/Media")
         val business = File(base, "Android/media/com.whatsapp.w4b/WhatsApp Business/Media")
+
         fun roots(media: File, prefix: String) = listOf(
-            File(media, "$prefix Images"), File(media, "$prefix Video"),
-            File(media, "$prefix Documents"), File(media, "$prefix Audio"),
-            File(media, "$prefix Stickers")
+            File(media, "$prefix Images"),
+            File(media, "$prefix Video"),
+            File(media, "$prefix Documents"),
+            File(media, "$prefix Audio"),
+            File(media, "$prefix Stickers"),
+            File(media, "$prefix Voice Notes")
         )
-        return (roots(normal, "WhatsApp") + roots(business, "WhatsApp Business")).filter { it.exists() }
+
+        return (roots(normal, "WhatsApp") + roots(business, "WhatsApp Business"))
+            .filter { it.exists() && it.isDirectory }
     }
+
 
     private fun showWhatsappFileNotification(context: Context, item: WhatsappFile, setting: SmartAlertsManager.DetectorSettings) {
         playDirectSoundAndVibration(context, setting.sound, setting.vibration)
