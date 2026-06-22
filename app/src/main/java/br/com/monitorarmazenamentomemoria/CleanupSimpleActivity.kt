@@ -2592,14 +2592,6 @@ private fun updateSelectedInfo() {
         }
     }
 
-override fun onNewIntent(intent: Intent?) {
-    super.onNewIntent(intent)
-
-    if (intent?.action == "br.com.monitorarmazenamentomemoria.UNINSTALL_RESULT") {
-        handleUninstallResult(intent)
-    }
-}
-
 override fun onResume() {
         super.onResume()
 
